@@ -13,6 +13,10 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.static(path.join(__dirname, '../client')));
 
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client', 'index.html'));
+});
+
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -31,6 +35,15 @@ function randName() {
 }
 
 const PLAYER_COLORS = ['#e84b3a','#4b8fc8','#4bc87a','#c8a84b','#c84bc8','#4bc8c8'];
+
+// ─── BÂTIMENTS ────────────────────────────────────────────────────────────────
+const BUILDINGS_DEF = {
+  recruit_post: {
+    id: 'recruit_post',
+    name: 'Poste de recrutement',
+    cost: { gold: 325, mat: 450 },
+  },
+};
 
 // ─── HEX MAP ─────────────────────────────────────────────────────────────────
 
@@ -55,11 +68,11 @@ function generateMap(cols = 10, rows = 8) {
         active: Math.random() > edgeFactor,
         owner: null,
         color: null,
+        building: null,
       };
     }
   }
 
-  // Flood fill pour connexité
   const centerKey = `${Math.floor(cols/2)},${Math.floor(rows/2)}`;
   tiles[centerKey].active = true;
   const visited = new Set([centerKey]);
@@ -116,7 +129,8 @@ function createRoom(hostSocket) {
   do { code = genCode(); } while (rooms.has(code));
   const player = {
     id: hostSocket.id, name: randName(), socketId: hostSocket.id,
-    isHost: true, colorIndex: 0, color: PLAYER_COLORS[0], resources: 0,
+    isHost: true, colorIndex: 0, color: PLAYER_COLORS[0],
+    resources: { gold: 0, mat: 0, mec: 0, fuel: 0 },
   };
   const room = {
     code, hostId: hostSocket.id,
@@ -137,7 +151,8 @@ function joinRoom(code, socket) {
   const colorIndex = room.players.size;
   const player = {
     id: socket.id, name: randName(), socketId: socket.id,
-    isHost: false, colorIndex, color: PLAYER_COLORS[colorIndex], resources: 0,
+    isHost: false, colorIndex, color: PLAYER_COLORS[colorIndex],
+    resources: { gold: 0, mat: 0, mec: 0, fuel: 0 },
   };
   room.players.set(socket.id, player);
   playerRoom.set(socket.id, code.toUpperCase());
@@ -164,7 +179,7 @@ function leaveRoom(socketId) {
   }
   if (room.map) {
     for (const tile of Object.values(room.map.tiles)) {
-      if (tile.owner === socketId) { tile.owner = null; tile.color = null; }
+      if (tile.owner === socketId) { tile.owner = null; tile.color = null; tile.building = null; }
     }
     io.to(code).emit('map:update', room.map.tiles);
   }
@@ -192,18 +207,26 @@ function isAdjacentToPlayer(map, col, row, playerId) {
   });
 }
 
+function broadcastResources(room) {
+  const resources = {};
+  for (const [sid, p] of room.players) resources[sid] = p.resources;
+  io.to(room.code).emit('game:resources', resources);
+}
+
 function startGame(room) {
   room.status = 'playing';
   room.map = generateMap(10, 8);
   const playerList = Array.from(room.players.values());
   const starts = chooseStartPositions(room.map, playerList.length);
+
   starts.forEach((pos, i) => {
     if (!pos) return;
     const player = playerList[i];
     const tile = room.map.tiles[pos.key];
     tile.owner = player.id;
     tile.color = player.color;
-    player.resources = 10;
+    // Ressources de départ
+    player.resources = { gold: 500, mat: 500, mec: 500, fuel: 500 };
   });
 
   io.to(room.code).emit('game:start', {
@@ -217,16 +240,19 @@ function startGame(room) {
     io.to(sid).emit('game:myId', { myId: sid, color: player.color });
   }
 
+  broadcastResources(room);
+
   room.tickInterval = setInterval(() => {
     room.tickCount++;
+    // Toutes les 4 ticks (2 secondes) : gain de ressources
     if (room.tickCount % 4 === 0) {
       for (const player of room.players.values()) {
         const owned = Object.values(room.map.tiles).filter(t => t.owner === player.id).length;
-        player.resources += owned;
+        player.resources.gold += owned;
+        // Légère production passive de mat et fuel selon les cases possédées
+        player.resources.mat += Math.floor(owned / 2);
       }
-      const resources = {};
-      for (const [sid, p] of room.players) resources[sid] = p.resources;
-      io.to(room.code).emit('game:resources', resources);
+      broadcastResources(room);
     }
     io.to(room.code).emit('game:tick', { tick: room.tickCount });
   }, 500);
@@ -275,18 +301,14 @@ io.on('connection', (socket) => {
     if (!tile || !tile.active) return cb?.({ success: false, error: 'Case invalide' });
     if (tile.owner === socket.id) return cb?.({ success: false, error: 'Déjà à toi' });
     if (!isAdjacentToPlayer(room.map, col, row, socket.id)) return cb?.({ success: false, error: 'Pas adjacent' });
-    if (player.resources < 5) return cb?.({ success: false, error: 'Pas assez de ressources (5 requis)' });
+    if (player.resources.gold < 5) return cb?.({ success: false, error: 'Pas assez d\'argent (5💰 requis)' });
 
-    player.resources -= 5;
+    player.resources.gold -= 5;
     tile.owner = socket.id;
     tile.color = player.color;
 
     io.to(code).emit('map:update', { [key]: tile });
-
-    const resources = {};
-    for (const [sid, p] of room.players) resources[sid] = p.resources;
-    io.to(code).emit('game:resources', resources);
-
+    broadcastResources(room);
     cb?.({ success: true });
 
     // Vérif victoire 60%
@@ -296,6 +318,41 @@ io.on('connection', (socket) => {
       clearInterval(room.tickInterval);
       io.to(code).emit('game:over', { winner: { id: socket.id, name: player.name, color: player.color } });
     }
+  });
+
+  // ── Construction de bâtiment ──
+  socket.on('tile:build', ({ col, row, buildingId }, cb) => {
+    const code = playerRoom.get(socket.id);
+    const room = rooms.get(code);
+    if (!room || room.status !== 'playing') return cb?.({ success: false, error: 'Partie non active' });
+    const player = room.players.get(socket.id);
+    if (!player) return cb?.({ success: false, error: 'Joueur introuvable' });
+
+    const key = `${col},${row}`;
+    const tile = room.map.tiles[key];
+    if (!tile || !tile.active) return cb?.({ success: false, error: 'Case invalide' });
+    if (tile.owner !== socket.id) return cb?.({ success: false, error: 'Ce n\'est pas votre territoire' });
+    if (tile.building) return cb?.({ success: false, error: 'Un bâtiment existe déjà ici' });
+
+    const def = BUILDINGS_DEF[buildingId];
+    if (!def) return cb?.({ success: false, error: 'Bâtiment inconnu' });
+
+    // Vérifier les ressources
+    for (const [resType, cost] of Object.entries(def.cost)) {
+      if ((player.resources[resType] ?? 0) < cost) {
+        return cb?.({ success: false, error: `Pas assez de ${resType} (${cost} requis)` });
+      }
+    }
+
+    // Débiter les ressources
+    for (const [resType, cost] of Object.entries(def.cost)) {
+      player.resources[resType] -= cost;
+    }
+
+    tile.building = buildingId;
+    io.to(code).emit('map:update', { [key]: tile });
+    broadcastResources(room);
+    cb?.({ success: true });
   });
 
   socket.on('disconnect', () => {

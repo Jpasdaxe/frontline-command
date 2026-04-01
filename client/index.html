@@ -136,15 +136,24 @@
       pointer-events: none; display: none; z-index: 50; letter-spacing: 1px;
     }
 
-    /* Bottom bar */
+    /* ── RESOURCES BAR ── */
     .hud-bottom {
-      padding: 10px 16px; background: rgba(10,12,14,0.92);
+      padding: 8px 16px; background: rgba(10,12,14,0.95);
       border-top: 1px solid var(--border); display: flex; align-items: center;
-      gap: 12px; flex-shrink: 0;
+      gap: 16px; flex-shrink: 0; flex-wrap: wrap;
     }
-    .my-resources {
-      font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 2px;
+    .res-group { display: flex; gap: 12px; flex-wrap: wrap; }
+    .res-item {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--mono); font-size: 12px; letter-spacing: 1px;
     }
+    .res-icon { font-size: 14px; }
+    .res-label { color: var(--muted); font-size: 10px; letter-spacing: 2px; }
+    .res-value { color: var(--text); font-weight: bold; }
+    .res-value.gold { color: var(--accent); }
+    .res-value.mat { color: #7ec8a0; }
+    .res-value.mec { color: #8ab4e8; }
+    .res-value.fuel { color: #e8a87c; }
     .capture-hint {
       font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; flex: 1;
     }
@@ -154,6 +163,157 @@
       background: transparent; cursor: pointer; transition: all .15s;
     }
     .btn-leave:hover { color: var(--danger); border-color: var(--danger); }
+
+    /* ── WHEEL MENU ── */
+    .wheel-overlay {
+      position: fixed; inset: 0; z-index: 80;
+      pointer-events: none;
+    }
+    .wheel-overlay.active { pointer-events: all; }
+
+    .wheel-bg-click {
+      position: absolute; inset: 0;
+    }
+
+    .wheel-container {
+      position: absolute;
+      transform: translate(-50%, -50%);
+    }
+
+    /* Centre */
+    .wheel-center {
+      position: absolute;
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid var(--accent);
+      transform: translate(-50%, -50%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      z-index: 2;
+      box-shadow: 0 0 20px rgba(200,168,75,0.3);
+    }
+
+    /* Segments de la roue */
+    .wheel-segment {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: all .15s;
+      z-index: 3;
+    }
+
+    .wheel-segment-btn {
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 2px solid var(--border);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      transition: all .2s;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    .wheel-segment-btn:hover {
+      border-color: var(--accent);
+      background: #1e2430;
+      transform: scale(1.12);
+      box-shadow: 0 0 16px rgba(200,168,75,0.25);
+    }
+    .wheel-segment-btn .seg-icon { font-size: 22px; line-height: 1; }
+    .wheel-segment-btn .seg-label {
+      font-family: var(--mono); font-size: 8px; letter-spacing: 1px;
+      color: var(--muted); text-align: center; line-height: 1.1;
+    }
+    .wheel-segment-btn:hover .seg-label { color: var(--accent); }
+
+    /* Connecteur roue */
+    .wheel-line {
+      position: absolute;
+      transform-origin: 0 50%;
+      height: 1px;
+      background: var(--border);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
+    /* Animation roue */
+    @keyframes wheelIn {
+      from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+      to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+    .wheel-container { animation: wheelIn .18s cubic-bezier(.34,1.56,.64,1); }
+
+    /* ── SUBMENU CONSTRUIRE ── */
+    .build-menu {
+      position: fixed; z-index: 90;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      min-width: 280px;
+      display: none;
+      flex-direction: column;
+      animation: fadeIn .15s ease;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    .build-menu.active { display: flex; }
+    .build-menu-title {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 3px;
+      color: var(--accent); padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .build-item {
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 14px 16px; cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background .12s;
+    }
+    .build-item:last-child { border-bottom: none; }
+    .build-item:hover { background: var(--surface2); }
+    .build-item.disabled { opacity: .45; cursor: not-allowed; }
+    .build-item.disabled:hover { background: transparent; }
+    .build-item-name {
+      font-family: var(--sans); font-size: 16px; font-weight: 600;
+      letter-spacing: 2px; color: var(--text);
+    }
+    .build-item-cost {
+      display: flex; gap: 12px; flex-wrap: wrap;
+    }
+    .build-cost-tag {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+      padding: 2px 8px; border: 1px solid;
+    }
+    .build-cost-tag.gold { color: var(--accent); border-color: var(--accent); }
+    .build-cost-tag.mat { color: #7ec8a0; border-color: #7ec8a0; }
+    .build-cost-tag.insufficient { color: var(--danger); border-color: var(--danger); text-decoration: line-through; }
+    .build-menu-close {
+      padding: 8px 16px; font-family: var(--mono); font-size: 10px;
+      color: var(--muted); letter-spacing: 2px; cursor: pointer;
+      text-align: center; border-top: 1px solid var(--border);
+      transition: color .12s;
+    }
+    .build-menu-close:hover { color: var(--danger); }
+
+    /* ── BÂTIMENT SUR HEXAGONE ── */
+    .building-icon { pointer-events: none; }
+
+    /* Notification flottante */
+    .notif {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--border);
+      font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
+      padding: 10px 20px; color: var(--text); z-index: 200;
+      animation: notifIn .2s ease, notifOut .3s ease 1.7s forwards;
+      white-space: nowrap;
+    }
+    .notif.success { border-left: 3px solid var(--success); color: var(--success); }
+    .notif.error { border-left: 3px solid var(--danger); color: var(--danger); }
+    @keyframes notifIn { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+    @keyframes notifOut { from{opacity:1} to{opacity:0} }
 
     /* Victory overlay */
     .victory-overlay {
@@ -177,7 +337,7 @@
 <!-- LOBBY -->
 <div class="lobby-wrap" id="lobby-wrap">
   <div class="header">
-    <div class="header-tag">// TACTICAL SYSTEM v0.2 //</div>
+    <div class="header-tag">// TACTICAL SYSTEM v0.3 //</div>
     <h1>FRONT<span>LINE</span></h1>
     <div class="header-sub">COMMAND &amp; CONTROL INTERFACE</div>
   </div>
@@ -245,10 +405,47 @@
   </div>
   <div class="tile-tooltip" id="tile-tooltip"></div>
   <div class="hud-bottom">
-    <div class="my-resources">⬡ RESSOURCES : <span id="my-res">0</span></div>
-    <div class="capture-hint">CLIC sur un hexagone adjacent pour capturer (coût : 5)</div>
+    <div class="res-group">
+      <div class="res-item">
+        <span class="res-icon">💰</span>
+        <span class="res-label">ARGENT</span>
+        <span class="res-value gold" id="res-gold">500</span>
+      </div>
+      <div class="res-item">
+        <span class="res-icon">🪨</span>
+        <span class="res-label">MATÉRIAUX</span>
+        <span class="res-value mat" id="res-mat">500</span>
+      </div>
+      <div class="res-item">
+        <span class="res-icon">⚙️</span>
+        <span class="res-label">MÉCANISME</span>
+        <span class="res-value mec" id="res-mec">500</span>
+      </div>
+      <div class="res-item">
+        <span class="res-icon">⛽</span>
+        <span class="res-label">FUEL</span>
+        <span class="res-value fuel" id="res-fuel">500</span>
+      </div>
+    </div>
+    <div class="capture-hint" id="bottom-hint">CLIC sur un hex adjacent pour capturer (5💰) · CLIC sur votre hex pour construire</div>
     <button class="btn-leave" onclick="leaveRoom()">QUITTER</button>
   </div>
+</div>
+
+<!-- ROUE CONTEXTUELLE -->
+<div class="wheel-overlay" id="wheel-overlay">
+  <div class="wheel-bg-click" onclick="closeWheel()"></div>
+  <div class="wheel-container" id="wheel-container">
+    <div class="wheel-center" id="wheel-center">🏠</div>
+    <!-- segments générés par JS -->
+  </div>
+</div>
+
+<!-- SOUS-MENU CONSTRUIRE -->
+<div class="build-menu" id="build-menu">
+  <div class="build-menu-title">🛠️ CONSTRUIRE</div>
+  <div id="build-items"></div>
+  <div class="build-menu-close" onclick="closeBuildMenu()">✕ FERMER</div>
 </div>
 
 <!-- VICTORY -->
@@ -268,18 +465,26 @@ let myColor = null;
 let currentRoom = null;
 let gameMap = null;
 let gamePlayers = {};
-let myResources = 0;
+let myResources = { gold: 500, mat: 500, mec: 500, fuel: 500 };
 
 socket.on('connect', () => { myId = socket.id; setConn(true); });
 socket.on('disconnect', () => setConn(false));
 socket.on('lobby:update', (room) => { currentRoom = room; renderLobby(room); });
 socket.on('game:start', (data) => initGame(data));
 socket.on('game:myId', (data) => { myId = data.myId; myColor = data.color; });
-socket.on('map:update', (tiles) => { if (gameMap) { Object.assign(gameMap.tiles, tiles); drawMap(); } });
+socket.on('map:update', (tiles) => {
+  if (gameMap) {
+    Object.assign(gameMap.tiles, tiles);
+    drawMap();
+  }
+});
 socket.on('game:resources', (res) => {
   for (const [id, amount] of Object.entries(res)) {
     if (gamePlayers[id]) gamePlayers[id].resources = amount;
-    if (id === myId) { myResources = amount; document.getElementById('my-res').textContent = amount; }
+    if (id === myId) {
+      myResources = typeof amount === 'object' ? amount : { gold: amount, mat: myResources.mat, mec: myResources.mec, fuel: myResources.fuel };
+      updateResDisplay();
+    }
   }
   updateHudPlayers();
 });
@@ -332,9 +537,11 @@ function doJoin() {
 function leaveRoom() {
   socket.emit('room:leave');
   currentRoom = null; gameMap = null; gamePlayers = {};
+  myResources = { gold: 500, mat: 500, mec: 500, fuel: 500 };
   document.getElementById('game-screen').classList.remove('active');
   document.getElementById('lobby-wrap').style.display = 'flex';
   document.getElementById('victory-overlay').classList.remove('active');
+  closeWheel(); closeBuildMenu();
   showPanel('menu');
 }
 function startGame() {
@@ -381,13 +588,40 @@ function renderLobby(room) {
     `▶ COMMENCER (${room.players.length} JOUEURS)`;
 }
 
+function updateResDisplay() {
+  document.getElementById('res-gold').textContent = myResources.gold ?? 0;
+  document.getElementById('res-mat').textContent = myResources.mat ?? 0;
+  document.getElementById('res-mec').textContent = myResources.mec ?? 0;
+  document.getElementById('res-fuel').textContent = myResources.fuel ?? 0;
+}
+
+function showNotif(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `notif ${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2100);
+}
+
 // ─── HEX MAP ─────────────────────────────────────────────────────────────────
 
-const HEX_SIZE = 32; // rayon d'un hexagone
+const HEX_SIZE = 32;
 let canvas, ctx, canvasWrap;
-let offsetX = 0, offsetY = 0; // pan
+let offsetX = 0, offsetY = 0;
 let isDragging = false, dragStart = null, dragOffset = null;
 let hoveredTile = null;
+let selectedTile = null; // tile sélectionnée pour la roue
+
+// Définitions des bâtiments
+const BUILDINGS = {
+  recruit_post: {
+    id: 'recruit_post',
+    name: 'Poste de recrutement',
+    icon: '🪖',
+    cost: { gold: 325, mat: 450 },
+    emoji: '🪖',
+  }
+};
 
 function hexToPixel(col, row) {
   const w = HEX_SIZE * Math.sqrt(3);
@@ -398,10 +632,7 @@ function hexToPixel(col, row) {
 }
 
 function pixelToHex(px, py) {
-  // Rough inverse — on cherche la case la plus proche
   if (!gameMap) return null;
-  const w = HEX_SIZE * Math.sqrt(3);
-  const h = HEX_SIZE * 2;
   let bestKey = null, bestDist = Infinity;
   for (const key of Object.keys(gameMap.tiles)) {
     const tile = gameMap.tiles[key];
@@ -444,37 +675,38 @@ function drawMap() {
     const { x, y } = hexToPixel(tile.col, tile.row);
     const key = `${tile.col},${tile.row}`;
     const isHovered = hoveredTile === key;
+    const isSelected = selectedTile === key;
     const isOwned = tile.owner !== null;
     const isAdj = myId && isAdjacentToPlayer_client(tile.col, tile.row);
 
     let fill = '#1a2030';
     let stroke = '#2a3040';
 
-    if (isOwned) {
-      fill = tile.color + 'cc';
-      stroke = tile.color;
-    }
-    if (tile.owner === myId) {
-      fill = tile.color + 'ee';
-      stroke = tile.color;
-    }
+    if (isOwned) { fill = tile.color + 'cc'; stroke = tile.color; }
+    if (tile.owner === myId) { fill = tile.color + 'ee'; stroke = tile.color; }
     if (isHovered && !isOwned) {
       fill = isAdj ? '#ffffff22' : '#ffffff0a';
       stroke = isAdj ? '#ffffff66' : '#ffffff22';
     }
-    if (isHovered && isOwned && tile.owner !== myId) {
-      fill = tile.color + 'aa';
-      stroke = '#ffffff88';
-    }
+    if (isHovered && isOwned && tile.owner !== myId) { fill = tile.color + 'aa'; stroke = '#ffffff88'; }
+    if (isSelected) { stroke = '#ffffff'; fill = tile.owner === myId ? tile.color + 'ff' : '#ffffff22'; }
 
     drawHex(x, y, HEX_SIZE - 2, fill, stroke);
 
     // Indicateur de capture disponible
-    if (isAdj && !isOwned && !isHovered) {
-      drawHex(x, y, HEX_SIZE * 0.3, myColor + '55', myColor + '88');
-    }
-    if (isAdj && isOwned && tile.owner !== myId && !isHovered) {
-      drawHex(x, y, HEX_SIZE * 0.25, '#ff000033', '#ff000066');
+    if (isAdj && !isOwned && !isHovered) drawHex(x, y, HEX_SIZE * 0.3, myColor + '55', myColor + '88');
+    if (isAdj && isOwned && tile.owner !== myId && !isHovered) drawHex(x, y, HEX_SIZE * 0.25, '#ff000033', '#ff000066');
+
+    // Icône bâtiment
+    if (tile.building) {
+      const b = BUILDINGS[tile.building];
+      if (b) {
+        ctx.font = `${HEX_SIZE * 0.6}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.globalAlpha = 1;
+        ctx.fillText(b.emoji, x, y);
+      }
     }
   }
 
@@ -501,12 +733,141 @@ function updateHudPlayers() {
     const owned = gameMap ? Object.values(gameMap.tiles).filter(t => t.owner === p.id).length : 0;
     const div = document.createElement('div');
     div.className = 'hud-player' + (p.id === myId ? ' hud-me' : '');
+    const gold = typeof p.resources === 'object' ? (p.resources?.gold ?? 0) : (p.resources ?? 0);
     div.innerHTML = `<div class="hud-player-dot" style="background:${p.color}"></div>
       <div class="hud-player-name">${p.name}</div>
-      <div class="hud-player-res">⬡${p.resources} | ▣${owned}</div>`;
+      <div class="hud-player-res">💰${gold} ▣${owned}</div>`;
     hud.appendChild(div);
   }
 }
+
+// ─── ROUE CONTEXTUELLE ────────────────────────────────────────────────────────
+
+const WHEEL_CATEGORIES = [
+  { id: 'build', icon: '🛠️', label: 'CONSTRUIRE', angle: -90 },
+];
+
+let wheelTargetKey = null;
+
+function openWheel(screenX, screenY, tileKey) {
+  closeWheel();
+  closeBuildMenu();
+  wheelTargetKey = tileKey;
+  selectedTile = tileKey;
+  drawMap();
+
+  const overlay = document.getElementById('wheel-overlay');
+  const container = document.getElementById('wheel-container');
+  container.style.left = screenX + 'px';
+  container.style.top = screenY + 'px';
+
+  // Vider les anciens segments
+  const center = document.getElementById('wheel-center');
+  container.innerHTML = '';
+  container.appendChild(center);
+
+  // Générer les segments
+  const radius = 80;
+  WHEEL_CATEGORIES.forEach((cat) => {
+    const rad = (cat.angle * Math.PI) / 180;
+    const sx = Math.cos(rad) * radius;
+    const sy = Math.sin(rad) * radius;
+
+    const seg = document.createElement('div');
+    seg.className = 'wheel-segment';
+    seg.style.left = (sx) + 'px';
+    seg.style.top = (sy) + 'px';
+
+    const btn = document.createElement('div');
+    btn.className = 'wheel-segment-btn';
+    btn.innerHTML = `<span class="seg-icon">${cat.icon}</span><span class="seg-label">${cat.label}</span>`;
+    btn.onclick = (e) => { e.stopPropagation(); onWheelCategory(cat.id, screenX, screenY); };
+    seg.appendChild(btn);
+    container.appendChild(seg);
+  });
+
+  overlay.classList.add('active');
+}
+
+function closeWheel() {
+  document.getElementById('wheel-overlay').classList.remove('active');
+  wheelTargetKey = null;
+  if (selectedTile) { selectedTile = null; drawMap(); }
+}
+
+function onWheelCategory(catId, sx, sy) {
+  closeWheel();
+  if (catId === 'build') openBuildMenu(sx, sy);
+}
+
+// ─── MENU CONSTRUIRE ─────────────────────────────────────────────────────────
+
+function openBuildMenu(screenX, screenY) {
+  const menu = document.getElementById('build-menu');
+  const itemsEl = document.getElementById('build-items');
+  itemsEl.innerHTML = '';
+
+  Object.values(BUILDINGS).forEach(b => {
+    const canAfford = (myResources.gold >= (b.cost.gold || 0)) && (myResources.mat >= (b.cost.mat || 0));
+    const tile = gameMap?.tiles[wheelTargetKey];
+    const alreadyBuilt = tile?.building === b.id;
+
+    const item = document.createElement('div');
+    item.className = 'build-item' + (!canAfford || alreadyBuilt ? ' disabled' : '');
+
+    const costTags = Object.entries(b.cost).map(([type, val]) => {
+      const enough = myResources[type] >= val;
+      const label = { gold: '💰', mat: '🪨', mec: '⚙️', fuel: '⛽' }[type] || type;
+      return `<span class="build-cost-tag ${type} ${!enough ? 'insufficient' : ''}">${label} ${val}</span>`;
+    }).join('');
+
+    item.innerHTML = `
+      <div class="build-item-name">${b.icon} ${b.name}</div>
+      <div class="build-item-cost">${costTags}${alreadyBuilt ? '<span class="build-cost-tag" style="color:var(--success);border-color:var(--success)">DÉJÀ CONSTRUIT</span>' : ''}</div>
+    `;
+
+    if (canAfford && !alreadyBuilt) {
+      item.onclick = () => doBuild(b.id);
+    }
+    itemsEl.appendChild(item);
+  });
+
+  // Positionnement intelligent (évite de sortir de l'écran)
+  menu.style.display = 'flex';
+  const rect = menu.getBoundingClientRect();
+  let left = screenX + 20;
+  let top = screenY - 20;
+  if (left + rect.width > window.innerWidth - 10) left = screenX - rect.width - 20;
+  if (top + rect.height > window.innerHeight - 10) top = window.innerHeight - rect.height - 10;
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+  menu.classList.add('active');
+  selectedTile = wheelTargetKey;
+  drawMap();
+}
+
+function closeBuildMenu() {
+  document.getElementById('build-menu').classList.remove('active');
+  selectedTile = null;
+  drawMap();
+}
+
+function doBuild(buildingId) {
+  if (!wheelTargetKey) return;
+  const tile = gameMap.tiles[wheelTargetKey];
+  if (!tile) return;
+
+  socket.emit('tile:build', { col: tile.col, row: tile.row, buildingId }, (res) => {
+    if (res?.success) {
+      showNotif(`${BUILDINGS[buildingId].icon} ${BUILDINGS[buildingId].name} construit !`, 'success');
+    } else {
+      showNotif(res?.error || 'Construction impossible', 'error');
+    }
+  });
+  closeBuildMenu();
+}
+
+// ─── INIT GAME ───────────────────────────────────────────────────────────────
 
 function initGame(data) {
   gameMap = data.map;
@@ -519,11 +880,9 @@ function initGame(data) {
   canvasWrap = document.getElementById('game-canvas-wrap');
   ctx = canvas.getContext('2d');
 
-  // Taille du canvas
   function resize() {
     canvas.width = canvasWrap.clientWidth;
     canvas.height = canvasWrap.clientHeight;
-    // Centre la carte
     const mapW = gameMap.cols * HEX_SIZE * Math.sqrt(3);
     const mapH = gameMap.rows * HEX_SIZE * 1.5;
     offsetX = (canvas.width - mapW) / 2 + HEX_SIZE;
@@ -532,10 +891,10 @@ function initGame(data) {
   }
   resize();
   window.addEventListener('resize', resize);
-
   updateHudPlayers();
+  updateResDisplay();
 
-  // ── Events ──
+  // ── Drag & hover ──
   canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
     const px = e.clientX - rect.left - offsetX;
@@ -551,16 +910,19 @@ function initGame(data) {
     const key = pixelToHex(px, py);
     if (key !== hoveredTile) { hoveredTile = key; drawMap(); }
 
-    // Tooltip
     const tooltip = document.getElementById('tile-tooltip');
     if (key && gameMap.tiles[key]) {
       const tile = gameMap.tiles[key];
       const owner = tile.owner ? (gamePlayers[tile.owner]?.name || '?') : 'Neutre';
       const adj = isAdjacentToPlayer_client(tile.col, tile.row);
+      const buildingInfo = tile.building ? ` | ${BUILDINGS[tile.building]?.icon || ''} ${BUILDINGS[tile.building]?.name || ''}` : '';
       tooltip.style.display = 'block';
       tooltip.style.left = (e.clientX + 12) + 'px';
       tooltip.style.top = (e.clientY - 10) + 'px';
-      tooltip.textContent = `${owner}${adj && tile.owner !== myId ? ' — CLIC pour capturer (5⬡)' : ''}`;
+      let hint = owner + buildingInfo;
+      if (tile.owner === myId) hint += ' — CLIC pour construire';
+      else if (adj && tile.owner !== myId) hint += ' — CLIC pour capturer (5💰)';
+      tooltip.textContent = hint;
       tooltip.style.borderColor = tile.color || 'var(--border)';
     } else {
       tooltip.style.display = 'none';
@@ -584,13 +946,17 @@ function initGame(data) {
   canvas.addEventListener('mouseup', (e) => {
     if (!isDragging && hoveredTile) {
       const tile = gameMap.tiles[hoveredTile];
-      if (tile && tile.active && tile.owner !== myId) {
-        socket.emit('tile:capture', { col: tile.col, row: tile.row }, (res) => {
-          if (!res?.success && res?.error) {
-            // Flash d'erreur sur le tile
-            console.log('Capture refusée:', res.error);
-          }
-        });
+      if (tile && tile.active) {
+        if (tile.owner === myId) {
+          // Ma tuile → ouvrir la roue
+          closeWheel(); closeBuildMenu();
+          openWheel(e.clientX, e.clientY, hoveredTile);
+        } else if (tile.owner !== myId) {
+          // Capture si adjacent
+          socket.emit('tile:capture', { col: tile.col, row: tile.row }, (res) => {
+            if (!res?.success && res?.error) showNotif(res.error, 'error');
+          });
+        }
       }
     }
     isDragging = false;
@@ -605,10 +971,7 @@ function initGame(data) {
     drawMap();
   });
 
-  // Zoom molette
-  canvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-  }, { passive: false });
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
 }
 </script>
 </body>
