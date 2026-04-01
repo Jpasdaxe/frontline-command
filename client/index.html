@@ -434,10 +434,9 @@
 
 <!-- ROUE CONTEXTUELLE -->
 <div class="wheel-overlay" id="wheel-overlay">
-  <div class="wheel-bg-click" onclick="closeWheel()"></div>
+  <div class="wheel-bg-click" id="wheel-bg-click"></div>
   <div class="wheel-container" id="wheel-container">
-    <div class="wheel-center" id="wheel-center">🏠</div>
-    <!-- segments générés par JS -->
+    <!-- entièrement généré par JS -->
   </div>
 </div>
 
@@ -445,7 +444,7 @@
 <div class="build-menu" id="build-menu">
   <div class="build-menu-title">🛠️ CONSTRUIRE</div>
   <div id="build-items"></div>
-  <div class="build-menu-close" onclick="closeBuildMenu()">✕ FERMER</div>
+  <div class="build-menu-close" id="build-menu-close">✕ FERMER</div>
 </div>
 
 <!-- VICTORY -->
@@ -761,9 +760,11 @@ function openWheel(screenX, screenY, tileKey) {
   container.style.left = screenX + 'px';
   container.style.top = screenY + 'px';
 
-  // Vider les anciens segments
-  const center = document.getElementById('wheel-center');
+  // Vider et reconstruire entièrement (bug 1 : center généré dynamiquement)
   container.innerHTML = '';
+  const center = document.createElement('div');
+  center.className = 'wheel-center';
+  center.textContent = '🏠';
   container.appendChild(center);
 
   // Générer les segments
@@ -785,6 +786,9 @@ function openWheel(screenX, screenY, tileKey) {
     seg.appendChild(btn);
     container.appendChild(seg);
   });
+
+  // Bug 2 : le bg-click ferme roue ET build-menu
+  document.getElementById('wheel-bg-click').onclick = () => { closeWheel(); closeBuildMenu(); };
 
   overlay.classList.add('active');
 }
@@ -851,6 +855,9 @@ function closeBuildMenu() {
   selectedTile = null;
   drawMap();
 }
+
+// Bouton fermer du build-menu (bug 3 : listener JS au lieu de onclick inline)
+document.getElementById('build-menu-close').addEventListener('click', () => closeBuildMenu());
 
 function doBuild(buildingId) {
   if (!wheelTargetKey) return;
