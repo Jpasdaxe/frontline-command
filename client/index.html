@@ -831,48 +831,70 @@ function openBuildMenu(screenX, screenY) {
     `;
 
     if (canAfford && !alreadyBuilt) {
-      item.onclick = () => doBuild(b.id);
+      item.onclick = (e) => {
+        e.stopPropagation();
+        doBuild(b.id);
+      };
     }
+
     itemsEl.appendChild(item);
   });
 
-  // Positionnement intelligent (évite de sortir de l'écran)
+  // Position
   menu.style.display = 'flex';
   const rect = menu.getBoundingClientRect();
   let left = screenX + 20;
   let top = screenY - 20;
+
   if (left + rect.width > window.innerWidth - 10) left = screenX - rect.width - 20;
   if (top + rect.height > window.innerHeight - 10) top = window.innerHeight - rect.height - 10;
+
   menu.style.left = left + 'px';
   menu.style.top = top + 'px';
+
   menu.classList.add('active');
+
+  // IMPORTANT : empêche fermeture quand on clique dedans
+  menu.onclick = (e) => e.stopPropagation();
+
   selectedTile = wheelTargetKey;
   drawMap();
 }
 
 function closeBuildMenu() {
-  document.getElementById('build-menu').classList.remove('active');
+  const menu = document.getElementById('build-menu');
+  menu.classList.remove('active');
   selectedTile = null;
   drawMap();
 }
 
-// Bouton fermer du build-menu (bug 3 : listener JS au lieu de onclick inline)
-document.getElementById('build-menu-close').addEventListener('click', () => closeBuildMenu());
-
-function doBuild(buildingId) {
-  if (!wheelTargetKey) return;
-  const tile = gameMap.tiles[wheelTargetKey];
-  if (!tile) return;
-
-  socket.emit('tile:build', { col: tile.col, row: tile.row, buildingId }, (res) => {
-    if (res?.success) {
-      showNotif(`${BUILDINGS[buildingId].icon} ${BUILDINGS[buildingId].name} construit !`, 'success');
-    } else {
-      showNotif(res?.error || 'Construction impossible', 'error');
-    }
-  });
+// Bouton fermer FIX
+document.getElementById('build-menu-close').onclick = (e) => {
+  e.stopPropagation();
   closeBuildMenu();
-}
+};
+
+// CLIC GLOBAL (fix principal)
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('build-menu');
+  const wheel = document.getElementById('wheel-container');
+
+  const clickInsideMenu = menu.contains(e.target);
+  const clickInsideWheel = wheel.contains(e.target);
+
+  if (!clickInsideMenu && !clickInsideWheel) {
+    closeBuildMenu();
+    closeWheel();
+  }
+});
+
+// ESC = fermer
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeBuildMenu();
+    closeWheel();
+  }
+});
 
 // ─── INIT GAME ───────────────────────────────────────────────────────────────
 
