@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Frontline Command</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0c0e; --surface: #111418; --surface2: #181c22;
+      --border: #2a3040; --accent: #c8a84b; --accent2: #4b8fc8;
+      --danger: #c84b4b; --success: #4bc88a; --text: #d4d8e0; --muted: #5a6070;
+      --mono: 'Share Tech Mono', monospace; --sans: 'Barlow Condensed', sans-serif;
+    }
+    body {
+      background: var(--bg); color: var(--text); font-family: var(--sans);
+      min-height: 100vh; overflow: hidden; position: relative;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image: linear-gradient(rgba(200,168,75,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(200,168,75,0.03) 1px, transparent 1px);
+      background-size: 40px 40px; pointer-events: none; z-index: 0;
+    }
+
+    /* ── CONN ── */
+    .conn-indicator {
+      position: fixed; top: 12px; right: 16px; z-index: 100;
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px;
+    }
+    .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
+    .conn-dot.on { background: var(--success); animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── LOBBY ── */
+    .lobby-wrap {
+      position: relative; z-index: 1; width: 100%; max-width: 560px;
+      padding: 24px 16px; display: flex; flex-direction: column; align-items: center;
+      margin: 0 auto; min-height: 100vh; justify-content: center;
+    }
+    .header { width: 100%; text-align: center; margin-bottom: 40px; }
+    .header-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 4px; color: var(--accent); opacity: .7; margin-bottom: 10px; }
+    .header h1 { font-family: var(--sans); font-size: 52px; font-weight: 700; letter-spacing: 6px; text-transform: uppercase; color: #fff; line-height: 1; }
+    .header h1 span { color: var(--accent); }
+    .header-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 3px; margin-top: 8px; }
+    .corners { position: relative; width: 100%; padding: 2px; }
+    .corners::before,.corners::after,.corners>.c3::before,.corners>.c3::after {
+      content:'';position:absolute;width:12px;height:12px;border-color:var(--accent);border-style:solid;opacity:.5;
+    }
+    .corners::before{top:0;left:0;border-width:1px 0 0 1px} .corners::after{top:0;right:0;border-width:1px 1px 0 0}
+    .corners>.c3::before{bottom:0;left:0;border-width:0 0 1px 1px} .corners>.c3::after{bottom:0;right:0;border-width:0 1px 1px 0}
+    .panel { background:var(--surface);border:1px solid var(--border);padding:32px;width:100%;display:none;flex-direction:column;gap:20px;animation:fadeIn .25s ease; }
+    .panel.active { display: flex; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .panel-title { font-family:var(--mono);font-size:11px;letter-spacing:3px;color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:4px; }
+    .btn { font-family:var(--sans);font-size:18px;font-weight:600;letter-spacing:3px;text-transform:uppercase;padding:16px 32px;border:1px solid;cursor:pointer;transition:all .15s;width:100%;position:relative;overflow:hidden;background:transparent; }
+    .btn::after{content:'';position:absolute;inset:0;background:currentColor;opacity:0;transition:opacity .15s}
+    .btn:hover::after{opacity:.08}.btn:active::after{opacity:.15}.btn:disabled{opacity:.4;cursor:not-allowed}
+    .btn-primary{color:var(--accent);border-color:var(--accent)}.btn-secondary{color:var(--accent2);border-color:var(--accent2)}
+    .btn-ghost{color:var(--muted);border-color:var(--border);font-size:14px;padding:10px 20px;letter-spacing:2px}
+    .btn-ghost:hover{color:var(--text);border-color:var(--muted)}
+    .btn-start{color:#0a0c0e;background:var(--accent);border-color:var(--accent);font-size:20px}
+    .btn-start:hover:not(:disabled){background:#d4b460}.btn-start:disabled{background:var(--border);border-color:var(--border);color:var(--muted)}
+    .code-box{background:var(--bg);border:1px solid var(--border);padding:20px;text-align:center}
+    .code-label{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:3px;margin-bottom:8px}
+    .code-value{font-family:var(--mono);font-size:36px;letter-spacing:10px;color:var(--accent);font-weight:bold}
+    .code-copy{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px;cursor:pointer;letter-spacing:2px;transition:color .15s}
+    .code-copy:hover{color:var(--accent)}
+    .players-label{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:3px;margin-bottom:6px}
+    .players-list{display:flex;flex-direction:column;gap:6px;min-height:80px}
+    .player-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface2);border-left:2px solid;animation:slideIn .2s ease}
+    @keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+    .player-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .player-name{font-family:var(--mono);font-size:14px;color:var(--text);flex:1}
+    .player-badge{font-family:var(--mono);font-size:9px;letter-spacing:2px;opacity:.7}
+    .player-count{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:right;letter-spacing:2px}
+    .input-group{display:flex;flex-direction:column;gap:8px}
+    .input-label{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:3px}
+    .code-input{font-family:var(--mono);font-size:28px;letter-spacing:8px;text-transform:uppercase;background:var(--bg);border:1px solid var(--border);color:var(--accent);padding:16px 20px;width:100%;text-align:center;outline:none;transition:border-color .15s}
+    .code-input:focus{border-color:var(--accent2)}.code-input.error{border-color:var(--danger);animation:shake .3s ease}
+    @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+    .error-msg{font-family:var(--mono);font-size:11px;color:var(--danger);letter-spacing:2px;text-align:center;min-height:16px}
+    .status-bar{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:2px}
+    .status-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse 1.5s ease-in-out infinite}
+    .divider{height:1px;background:var(--border);width:100%;margin:4px 0}
+    .join-status{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent2);padding:14px 18px;font-family:var(--mono);font-size:12px;color:var(--accent2);letter-spacing:2px}
+    .scanning-line{height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);width:100%;animation:scan 2s ease-in-out infinite;opacity:.4}
+    @keyframes scan{0%{transform:scaleX(0)}50%{transform:scaleX(1)}100%{transform:scaleX(0)}}
+    .blink{animation:blink 1.2s step-end infinite}
+    @keyframes blink{50%{opacity:0}}
+
+    /* ── GAME ── */
+    #game-screen {
+      display: none; position: fixed; inset: 0; z-index: 10;
+      flex-direction: column;
+    }
+    #game-screen.active { display: flex; }
+
+    /* HUD top */
+    .hud-top {
+      display: flex; align-items: center; gap: 16px;
+      padding: 10px 16px; background: rgba(10,12,14,0.92);
+      border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap;
+    }
+    .hud-title { font-family: var(--sans); font-size: 22px; font-weight: 700; letter-spacing: 4px; color: #fff; }
+    .hud-title span { color: var(--accent); }
+    .hud-players { display: flex; gap: 10px; flex: 1; flex-wrap: wrap; }
+    .hud-player {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--surface2); border: 1px solid var(--border);
+      padding: 4px 10px; border-radius: 2px;
+    }
+    .hud-player-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .hud-player-name { font-family: var(--mono); font-size: 11px; color: var(--text); }
+    .hud-player-res { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-left: 4px; }
+    .hud-me { border-color: var(--accent) !important; }
+    .hud-info {
+      font-family: var(--mono); font-size: 10px; color: var(--muted);
+      letter-spacing: 2px; margin-left: auto;
+    }
+    .hud-info span { color: var(--accent); }
+
+    /* Canvas */
+    #game-canvas-wrap {
+      flex: 1; position: relative; overflow: hidden; cursor: crosshair;
+    }
+    #game-canvas { display: block; }
+
+    /* Tooltip */
+    .tile-tooltip {
+      position: fixed; background: var(--surface); border: 1px solid var(--border);
+      padding: 6px 12px; font-family: var(--mono); font-size: 11px; color: var(--text);
+      pointer-events: none; display: none; z-index: 50; letter-spacing: 1px;
+    }
+
+    /* Bottom bar */
+    .hud-bottom {
+      padding: 10px 16px; background: rgba(10,12,14,0.92);
+      border-top: 1px solid var(--border); display: flex; align-items: center;
+      gap: 12px; flex-shrink: 0;
+    }
+    .my-resources {
+      font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 2px;
+    }
+    .capture-hint {
+      font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; flex: 1;
+    }
+    .btn-leave {
+      font-family: var(--sans); font-size: 13px; font-weight: 600; letter-spacing: 2px;
+      padding: 8px 16px; border: 1px solid var(--border); color: var(--muted);
+      background: transparent; cursor: pointer; transition: all .15s;
+    }
+    .btn-leave:hover { color: var(--danger); border-color: var(--danger); }
+
+    /* Victory overlay */
+    .victory-overlay {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(10,12,14,0.92); align-items: center; justify-content: center; flex-direction: column; gap: 24px;
+    }
+    .victory-overlay.active { display: flex; animation: fadeIn .5s ease; }
+    .victory-title { font-family: var(--sans); font-size: 64px; font-weight: 700; letter-spacing: 8px; color: var(--accent); }
+    .victory-name { font-family: var(--mono); font-size: 20px; letter-spacing: 4px; color: var(--text); }
+    .victory-btn { font-family: var(--sans); font-size: 18px; font-weight: 600; letter-spacing: 3px; padding: 14px 32px; border: 1px solid var(--accent); color: var(--accent); background: transparent; cursor: pointer; margin-top: 16px; }
+    .victory-btn:hover { background: var(--accent); color: #0a0c0e; }
+  </style>
+</head>
+<body>
+
+<div class="conn-indicator">
+  <div class="conn-dot" id="conn-dot"></div>
+  <span id="conn-label">HORS LIGNE</span>
+</div>
+
+<!-- LOBBY -->
+<div class="lobby-wrap" id="lobby-wrap">
+  <div class="header">
+    <div class="header-tag">// TACTICAL SYSTEM v0.2 //</div>
+    <h1>FRONT<span>LINE</span></h1>
+    <div class="header-sub">COMMAND &amp; CONTROL INTERFACE</div>
+  </div>
+  <div class="corners" style="width:100%">
+    <div class="c3"></div>
+    <div class="panel active" id="menu">
+      <div class="panel-title">// ACCÈS AU THÉÂTRE D'OPÉRATIONS</div>
+      <button class="btn btn-primary" onclick="goCreate()">▶ &nbsp; Créer une partie</button>
+      <button class="btn btn-secondary" onclick="goJoin()">◈ &nbsp; Rejoindre une partie</button>
+    </div>
+    <div class="panel" id="create">
+      <div class="panel-title">// CRÉATION DE SALLE</div>
+      <div class="code-box">
+        <div class="code-label">CODE DE SESSION</div>
+        <div class="code-value" id="room-code">----</div>
+        <div class="code-copy" onclick="copyCode()" id="copy-hint">[ COPIER LE CODE ]</div>
+      </div>
+      <div class="scanning-line"></div>
+      <div>
+        <div class="players-label">OPÉRATEURS CONNECTÉS</div>
+        <div class="players-list" id="create-players"></div>
+        <div class="player-count" id="create-count">1 / 6 JOUEURS</div>
+      </div>
+      <div class="divider"></div>
+      <div class="status-bar"><div class="status-dot"></div><span class="blink">EN ATTENTE DE JOUEURS...</span></div>
+      <button class="btn btn-start" id="start-btn" onclick="startGame()" disabled>EN ATTENTE D'UN ADVERSAIRE...</button>
+      <button class="btn btn-ghost" onclick="leaveRoom()">← RETOUR</button>
+    </div>
+    <div class="panel" id="join">
+      <div class="panel-title">// REJOINDRE UNE SALLE</div>
+      <div class="input-group">
+        <div class="input-label">ENTREZ LE CODE DE SESSION</div>
+        <input class="code-input" id="join-code" maxlength="4" placeholder="XXXX"
+          oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'');clearJoinError()"
+          onkeydown="if(event.key==='Enter')doJoin()"/>
+      </div>
+      <div class="error-msg" id="join-error"></div>
+      <button class="btn btn-secondary" onclick="doJoin()">◈ &nbsp; REJOINDRE LE SALON</button>
+      <button class="btn btn-ghost" onclick="showPanel('menu')">← RETOUR</button>
+    </div>
+    <div class="panel" id="waiting">
+      <div class="panel-title">// SALON D'ATTENTE</div>
+      <div class="join-status" id="waiting-status">CONNECTÉ AU SALON ----</div>
+      <div class="scanning-line"></div>
+      <div>
+        <div class="players-label">OPÉRATEURS PRÉSENTS</div>
+        <div class="players-list" id="waiting-players"></div>
+        <div class="player-count" id="waiting-count">-- / -- JOUEURS</div>
+      </div>
+      <div class="status-bar"><div class="status-dot"></div><span class="blink">EN ATTENTE DU COMMANDANT...</span></div>
+      <button class="btn btn-ghost" onclick="leaveRoom()">← QUITTER LE SALON</button>
+    </div>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game-screen">
+  <div class="hud-top">
+    <div class="hud-title">FRONT<span>LINE</span></div>
+    <div class="hud-players" id="hud-players"></div>
+    <div class="hud-info">TICK <span id="hud-tick">0</span></div>
+  </div>
+  <div id="game-canvas-wrap">
+    <canvas id="game-canvas"></canvas>
+  </div>
+  <div class="tile-tooltip" id="tile-tooltip"></div>
+  <div class="hud-bottom">
+    <div class="my-resources">⬡ RESSOURCES : <span id="my-res">0</span></div>
+    <div class="capture-hint">CLIC sur un hexagone adjacent pour capturer (coût : 5)</div>
+    <button class="btn-leave" onclick="leaveRoom()">QUITTER</button>
+  </div>
+</div>
+
+<!-- VICTORY -->
+<div class="victory-overlay" id="victory-overlay">
+  <div class="victory-title">VICTOIRE</div>
+  <div class="victory-name" id="victory-name"></div>
+  <button class="victory-btn" onclick="location.reload()">RETOUR AU MENU</button>
+</div>
+
+<script>
+// ─── SOCKET ──────────────────────────────────────────────────────────────────
+const SERVER_URL = window.location.hostname === 'localhost' ? '' : window.location.origin;
+const socket = io(SERVER_URL);
+
+let myId = null;
+let myColor = null;
+let currentRoom = null;
+let gameMap = null;
+let gamePlayers = {};
+let myResources = 0;
+
+socket.on('connect', () => { myId = socket.id; setConn(true); });
+socket.on('disconnect', () => setConn(false));
+socket.on('lobby:update', (room) => { currentRoom = room; renderLobby(room); });
+socket.on('game:start', (data) => initGame(data));
+socket.on('game:myId', (data) => { myId = data.myId; myColor = data.color; });
+socket.on('map:update', (tiles) => { if (gameMap) { Object.assign(gameMap.tiles, tiles); drawMap(); } });
+socket.on('game:resources', (res) => {
+  for (const [id, amount] of Object.entries(res)) {
+    if (gamePlayers[id]) gamePlayers[id].resources = amount;
+    if (id === myId) { myResources = amount; document.getElementById('my-res').textContent = amount; }
+  }
+  updateHudPlayers();
+});
+socket.on('game:tick', (data) => { document.getElementById('hud-tick').textContent = data.tick; });
+socket.on('game:over', (data) => {
+  const overlay = document.getElementById('victory-overlay');
+  const isMe = data.winner.id === myId;
+  document.getElementById('victory-name').innerHTML =
+    `<span style="color:${data.winner.color}">${data.winner.name}</span> CONTRÔLE LE TERRITOIRE${isMe ? '<br><span style="color:var(--success);font-size:14px">C\'EST TOI !</span>' : ''}`;
+  overlay.classList.add('active');
+});
+
+// ─── UI HELPERS ──────────────────────────────────────────────────────────────
+function setConn(on) {
+  document.getElementById('conn-dot').className = 'conn-dot' + (on ? ' on' : '');
+  document.getElementById('conn-label').textContent = on ? 'EN LIGNE' : 'HORS LIGNE';
+}
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function goCreate() {
+  socket.emit('room:create', {}, (res) => {
+    if (!res.success) return;
+    myColor = res.me.color;
+    currentRoom = res.room;
+    document.getElementById('room-code').textContent = res.room.code;
+    document.getElementById('copy-hint').textContent = '[ COPIER LE CODE ]';
+    renderLobby(res.room);
+    showPanel('create');
+  });
+}
+function goJoin() {
+  document.getElementById('join-code').value = '';
+  document.getElementById('join-error').textContent = '';
+  showPanel('join');
+}
+function doJoin() {
+  const code = document.getElementById('join-code').value.trim();
+  if (code.length !== 4) { showJoinError('CODE INVALIDE — 4 CARACTÈRES REQUIS'); return; }
+  socket.emit('room:join', { code }, (res) => {
+    if (!res.success) { showJoinError(res.error); return; }
+    myColor = res.me.color;
+    currentRoom = res.room;
+    document.getElementById('waiting-status').textContent = `CONNECTÉ AU SALON ${res.room.code}`;
+    renderLobby(res.room);
+    showPanel('waiting');
+  });
+}
+function leaveRoom() {
+  socket.emit('room:leave');
+  currentRoom = null; gameMap = null; gamePlayers = {};
+  document.getElementById('game-screen').classList.remove('active');
+  document.getElementById('lobby-wrap').style.display = 'flex';
+  document.getElementById('victory-overlay').classList.remove('active');
+  showPanel('menu');
+}
+function startGame() {
+  socket.emit('game:start', {}, (res) => { if (!res?.success) alert(res?.error || 'Erreur'); });
+}
+function copyCode() {
+  navigator.clipboard.writeText(document.getElementById('room-code').textContent).catch(()=>{});
+  document.getElementById('copy-hint').textContent = '[ ✓ COPIÉ ! ]';
+  setTimeout(() => document.getElementById('copy-hint').textContent = '[ COPIER LE CODE ]', 2000);
+}
+function showJoinError(msg) {
+  document.getElementById('join-error').textContent = msg;
+  const inp = document.getElementById('join-code');
+  inp.classList.add('error');
+  setTimeout(() => inp.classList.remove('error'), 500);
+}
+function clearJoinError() {
+  document.getElementById('join-error').textContent = '';
+  document.getElementById('join-code').classList.remove('error');
+}
+function renderLobby(room) {
+  [document.getElementById('create-players'), document.getElementById('waiting-players')].forEach(list => {
+    list.innerHTML = '';
+    room.players.forEach(p => {
+      const isMe = p.id === myId;
+      const row = document.createElement('div');
+      row.className = 'player-row';
+      row.style.borderLeftColor = p.color;
+      const badges = (p.isHost ? '<div class="player-badge" style="color:var(--accent)">HOST</div>' : '') +
+                     (isMe ? '<div class="player-badge" style="color:var(--success)">VOUS</div>' : '');
+      row.innerHTML = `<div class="player-dot" style="background:${p.color}"></div><div class="player-name">${p.name}</div>${badges}`;
+      list.appendChild(row);
+    });
+  });
+  const count = `${room.players.length} / 6 JOUEURS`;
+  document.getElementById('create-count').textContent = count;
+  document.getElementById('waiting-count').textContent = count;
+  const btn = document.getElementById('start-btn');
+  const isHost = room.hostId === myId;
+  const canStart = room.players.length >= 2 && isHost;
+  btn.disabled = !canStart;
+  btn.textContent = !isHost ? 'SEUL L\'HÔTE PEUT LANCER' :
+    room.players.length < 2 ? 'EN ATTENTE D\'UN ADVERSAIRE...' :
+    `▶ COMMENCER (${room.players.length} JOUEURS)`;
+}
+
+// ─── HEX MAP ─────────────────────────────────────────────────────────────────
+
+const HEX_SIZE = 32; // rayon d'un hexagone
+let canvas, ctx, canvasWrap;
+let offsetX = 0, offsetY = 0; // pan
+let isDragging = false, dragStart = null, dragOffset = null;
+let hoveredTile = null;
+
+function hexToPixel(col, row) {
+  const w = HEX_SIZE * Math.sqrt(3);
+  const h = HEX_SIZE * 2;
+  const x = col * w + (row % 2 === 1 ? w / 2 : 0);
+  const y = row * h * 0.75;
+  return { x, y };
+}
+
+function pixelToHex(px, py) {
+  // Rough inverse — on cherche la case la plus proche
+  if (!gameMap) return null;
+  const w = HEX_SIZE * Math.sqrt(3);
+  const h = HEX_SIZE * 2;
+  let bestKey = null, bestDist = Infinity;
+  for (const key of Object.keys(gameMap.tiles)) {
+    const tile = gameMap.tiles[key];
+    if (!tile.active) continue;
+    const { x, y } = hexToPixel(tile.col, tile.row);
+    const dx = px - x, dy = py - y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < bestDist && dist < HEX_SIZE * 1.1) { bestDist = dist; bestKey = key; }
+  }
+  return bestKey;
+}
+
+function drawHex(cx, cy, size, fillColor, strokeColor, alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = Math.PI / 180 * (60 * i - 30);
+    const x = cx + size * Math.cos(angle);
+    const y = cy + size * Math.sin(angle);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMap() {
+  if (!gameMap || !canvas) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+
+  for (const tile of Object.values(gameMap.tiles)) {
+    if (!tile.active) continue;
+    const { x, y } = hexToPixel(tile.col, tile.row);
+    const key = `${tile.col},${tile.row}`;
+    const isHovered = hoveredTile === key;
+    const isOwned = tile.owner !== null;
+    const isAdj = myId && isAdjacentToPlayer_client(tile.col, tile.row);
+
+    let fill = '#1a2030';
+    let stroke = '#2a3040';
+
+    if (isOwned) {
+      fill = tile.color + 'cc';
+      stroke = tile.color;
+    }
+    if (tile.owner === myId) {
+      fill = tile.color + 'ee';
+      stroke = tile.color;
+    }
+    if (isHovered && !isOwned) {
+      fill = isAdj ? '#ffffff22' : '#ffffff0a';
+      stroke = isAdj ? '#ffffff66' : '#ffffff22';
+    }
+    if (isHovered && isOwned && tile.owner !== myId) {
+      fill = tile.color + 'aa';
+      stroke = '#ffffff88';
+    }
+
+    drawHex(x, y, HEX_SIZE - 2, fill, stroke);
+
+    // Indicateur de capture disponible
+    if (isAdj && !isOwned && !isHovered) {
+      drawHex(x, y, HEX_SIZE * 0.3, myColor + '55', myColor + '88');
+    }
+    if (isAdj && isOwned && tile.owner !== myId && !isHovered) {
+      drawHex(x, y, HEX_SIZE * 0.25, '#ff000033', '#ff000066');
+    }
+  }
+
+  ctx.restore();
+}
+
+function isAdjacentToPlayer_client(col, row) {
+  if (!gameMap || !myId) return false;
+  const dirs_even = [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]];
+  const dirs_odd  = [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
+  const dirs = col % 2 === 0 ? dirs_even : dirs_odd;
+  return dirs.some(([dc, dr]) => {
+    const nc = col + dc, nr = row + dr;
+    if (nc < 0 || nr < 0 || nc >= gameMap.cols || nr >= gameMap.rows) return false;
+    const t = gameMap.tiles[`${nc},${nr}`];
+    return t && t.owner === myId;
+  });
+}
+
+function updateHudPlayers() {
+  const hud = document.getElementById('hud-players');
+  hud.innerHTML = '';
+  for (const p of Object.values(gamePlayers)) {
+    const owned = gameMap ? Object.values(gameMap.tiles).filter(t => t.owner === p.id).length : 0;
+    const div = document.createElement('div');
+    div.className = 'hud-player' + (p.id === myId ? ' hud-me' : '');
+    div.innerHTML = `<div class="hud-player-dot" style="background:${p.color}"></div>
+      <div class="hud-player-name">${p.name}</div>
+      <div class="hud-player-res">⬡${p.resources} | ▣${owned}</div>`;
+    hud.appendChild(div);
+  }
+}
+
+function initGame(data) {
+  gameMap = data.map;
+  data.players.forEach(p => { gamePlayers[p.id] = p; });
+
+  document.getElementById('lobby-wrap').style.display = 'none';
+  document.getElementById('game-screen').classList.add('active');
+
+  canvas = document.getElementById('game-canvas');
+  canvasWrap = document.getElementById('game-canvas-wrap');
+  ctx = canvas.getContext('2d');
+
+  // Taille du canvas
+  function resize() {
+    canvas.width = canvasWrap.clientWidth;
+    canvas.height = canvasWrap.clientHeight;
+    // Centre la carte
+    const mapW = gameMap.cols * HEX_SIZE * Math.sqrt(3);
+    const mapH = gameMap.rows * HEX_SIZE * 1.5;
+    offsetX = (canvas.width - mapW) / 2 + HEX_SIZE;
+    offsetY = (canvas.height - mapH) / 2 + HEX_SIZE;
+    drawMap();
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  updateHudPlayers();
+
+  // ── Events ──
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left - offsetX;
+    const py = e.clientY - rect.top - offsetY;
+
+    if (isDragging && dragStart) {
+      offsetX = dragOffset.x + (e.clientX - dragStart.x);
+      offsetY = dragOffset.y + (e.clientY - dragStart.y);
+      drawMap();
+      return;
+    }
+
+    const key = pixelToHex(px, py);
+    if (key !== hoveredTile) { hoveredTile = key; drawMap(); }
+
+    // Tooltip
+    const tooltip = document.getElementById('tile-tooltip');
+    if (key && gameMap.tiles[key]) {
+      const tile = gameMap.tiles[key];
+      const owner = tile.owner ? (gamePlayers[tile.owner]?.name || '?') : 'Neutre';
+      const adj = isAdjacentToPlayer_client(tile.col, tile.row);
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.clientX + 12) + 'px';
+      tooltip.style.top = (e.clientY - 10) + 'px';
+      tooltip.textContent = `${owner}${adj && tile.owner !== myId ? ' — CLIC pour capturer (5⬡)' : ''}`;
+      tooltip.style.borderColor = tile.color || 'var(--border)';
+    } else {
+      tooltip.style.display = 'none';
+    }
+  });
+
+  canvas.addEventListener('mousedown', (e) => {
+    isDragging = false;
+    dragStart = { x: e.clientX, y: e.clientY };
+    dragOffset = { x: offsetX, y: offsetY };
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (dragStart) {
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      if (Math.sqrt(dx*dx + dy*dy) > 5) isDragging = true;
+    }
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    if (!isDragging && hoveredTile) {
+      const tile = gameMap.tiles[hoveredTile];
+      if (tile && tile.active && tile.owner !== myId) {
+        socket.emit('tile:capture', { col: tile.col, row: tile.row }, (res) => {
+          if (!res?.success && res?.error) {
+            // Flash d'erreur sur le tile
+            console.log('Capture refusée:', res.error);
+          }
+        });
+      }
+    }
+    isDragging = false;
+    dragStart = null;
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    hoveredTile = null;
+    document.getElementById('tile-tooltip').style.display = 'none';
+    isDragging = false;
+    dragStart = null;
+    drawMap();
+  });
+
+  // Zoom molette
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+  }, { passive: false });
+}
+</script>
+</body>
+</html>
