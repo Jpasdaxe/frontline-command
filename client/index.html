@@ -865,11 +865,10 @@ function openBuildMenu(screenX, screenY) {
 
 function closeBuildMenu() {
   document.getElementById('build-menu').classList.remove('active');
-  // Désactiver aussi l'overlay de la roue si la roue est déjà fermée
-  if (!document.getElementById('wheel-overlay').classList.contains('active') ||
-      document.getElementById('wheel-container').children.length === 0) {
-    document.getElementById('wheel-overlay').classList.remove('active');
-  }
+  document.getElementById('build-menu').style.display = 'none';
+  document.getElementById('wheel-overlay').classList.remove('active');
+  document.getElementById('wheel-container').innerHTML = '';
+  wheelTargetKey = null;
   selectedTile = null;
   if (gameMap) drawMap();
 }
