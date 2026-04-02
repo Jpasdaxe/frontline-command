@@ -249,7 +249,7 @@
 
     /* ── SUBMENU CONSTRUIRE ── */
     .build-menu {
-      position: fixed; z-index: 90;
+      position: fixed; z-index: 95;
       background: var(--surface);
       border: 1px solid var(--border);
       border-left: 3px solid var(--accent);
@@ -432,19 +432,18 @@
   </div>
 </div>
 
-<!-- ROUE CONTEXTUELLE -->
+<!-- ROUE CONTEXTUELLE + BUILD MENU (même overlay) -->
 <div class="wheel-overlay" id="wheel-overlay">
   <div class="wheel-bg-click" id="wheel-bg-click"></div>
   <div class="wheel-container" id="wheel-container">
     <!-- entièrement généré par JS -->
   </div>
-</div>
-
-<!-- SOUS-MENU CONSTRUIRE -->
-<div class="build-menu" id="build-menu">
-  <div class="build-menu-title">🛠️ CONSTRUIRE</div>
-  <div id="build-items"></div>
-  <div class="build-menu-close" id="build-menu-close">✕ FERMER</div>
+  <!-- Build menu à l'intérieur de l'overlay pour être au-dessus du bg-click -->
+  <div class="build-menu" id="build-menu">
+    <div class="build-menu-title">🛠️ CONSTRUIRE</div>
+    <div id="build-items"></div>
+    <div class="build-menu-close" id="build-menu-close">✕ FERMER</div>
+  </div>
 </div>
 
 <!-- VICTORY -->
@@ -794,9 +793,14 @@ function openWheel(screenX, screenY, tileKey) {
 }
 
 function closeWheel() {
-  document.getElementById('wheel-overlay').classList.remove('active');
-  wheelTargetKey = null;
-  if (selectedTile) { selectedTile = null; drawMap(); }
+  // Vider le container de la roue sans toucher à l'overlay si build-menu est actif
+  document.getElementById('wheel-container').innerHTML = '';
+  const buildMenuActive = document.getElementById('build-menu').classList.contains('active');
+  if (!buildMenuActive) {
+    document.getElementById('wheel-overlay').classList.remove('active');
+    wheelTargetKey = null;
+    if (selectedTile) { selectedTile = null; drawMap(); }
+  }
 }
 
 function onWheelCategory(catId, sx, sy) {
@@ -831,70 +835,63 @@ function openBuildMenu(screenX, screenY) {
     `;
 
     if (canAfford && !alreadyBuilt) {
-      item.onclick = (e) => {
-        e.stopPropagation();
-        doBuild(b.id);
-      };
+      item.onclick = () => doBuild(b.id);
     }
-
     itemsEl.appendChild(item);
   });
 
-  // Position
+  // Positionnement intelligent
   menu.style.display = 'flex';
   const rect = menu.getBoundingClientRect();
   let left = screenX + 20;
   let top = screenY - 20;
-
   if (left + rect.width > window.innerWidth - 10) left = screenX - rect.width - 20;
   if (top + rect.height > window.innerHeight - 10) top = window.innerHeight - rect.height - 10;
-
   menu.style.left = left + 'px';
   menu.style.top = top + 'px';
-
   menu.classList.add('active');
 
-  // IMPORTANT : empêche fermeture quand on clique dedans
-  menu.onclick = (e) => e.stopPropagation();
+  // Le bg-click de la roue (déjà actif) gère aussi la fermeture du build-menu
+  // On met à jour son handler pour inclure closeBuildMenu
+  document.getElementById('wheel-bg-click').onclick = () => { closeWheel(); closeBuildMenu(); };
+  document.getElementById('wheel-overlay').classList.add('active');
 
   selectedTile = wheelTargetKey;
   drawMap();
 }
 
 function closeBuildMenu() {
-  const menu = document.getElementById('build-menu');
-  menu.classList.remove('active');
+  document.getElementById('build-menu').classList.remove('active');
+  // Désactiver aussi l'overlay de la roue si la roue est déjà fermée
+  if (!document.getElementById('wheel-overlay').classList.contains('active') ||
+      document.getElementById('wheel-container').children.length === 0) {
+    document.getElementById('wheel-overlay').classList.remove('active');
+  }
   selectedTile = null;
-  drawMap();
+  if (gameMap) drawMap();
 }
 
-// Bouton fermer FIX
-document.getElementById('build-menu-close').onclick = (e) => {
+// Bouton fermer — stopPropagation pour ne pas déclencher le bg-click
+document.getElementById('build-menu-close').addEventListener('click', (e) => {
   e.stopPropagation();
+  closeWheel();
   closeBuildMenu();
-};
-
-// CLIC GLOBAL (fix principal)
-document.addEventListener('click', (e) => {
-  const menu = document.getElementById('build-menu');
-  const wheel = document.getElementById('wheel-container');
-
-  const clickInsideMenu = menu.contains(e.target);
-  const clickInsideWheel = wheel.contains(e.target);
-
-  if (!clickInsideMenu && !clickInsideWheel) {
-    closeBuildMenu();
-    closeWheel();
-  }
 });
 
-// ESC = fermer
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    closeBuildMenu();
-    closeWheel();
-  }
-});
+function doBuild(buildingId) {
+  if (!wheelTargetKey) return;
+  const tile = gameMap.tiles[wheelTargetKey];
+  if (!tile) return;
+
+  socket.emit('tile:build', { col: tile.col, row: tile.row, buildingId }, (res) => {
+    if (res?.success) {
+      showNotif(`${BUILDINGS[buildingId].icon} ${BUILDINGS[buildingId].name} construit !`, 'success');
+    } else {
+      showNotif(res?.error || 'Construction impossible', 'error');
+    }
+  });
+  closeBuildMenu();
+}
 
 // ─── INIT GAME ───────────────────────────────────────────────────────────────
 
