@@ -722,7 +722,7 @@ function isAdjacentToPlayer_client(col, row) {
   if (!gameMap || !myId) return false;
   const dirs_even = [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]];
   const dirs_odd  = [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
-  const dirs = col % 2 === 0 ? dirs_even : dirs_odd;
+  const dirs = row % 2 === 0 ? dirs_even : dirs_odd;
   return dirs.some(([dc, dr]) => {
     const nc = col + dc, nr = row + dr;
     if (nc < 0 || nr < 0 || nc >= gameMap.cols || nr >= gameMap.rows) return false;
