@@ -169,15 +169,18 @@
       position: fixed; inset: 0; z-index: 80;
       pointer-events: none;
     }
-    .wheel-overlay.active { pointer-events: all; }
+    .wheel-overlay.active { pointer-events: all; cursor: default; }
 
     .wheel-bg-click {
       position: absolute; inset: 0;
+      z-index: 1; /* en dessous de tout le reste */
+      cursor: default;
     }
 
     .wheel-container {
       position: absolute;
       transform: translate(-50%, -50%);
+      z-index: 3;
     }
 
     /* Centre */
@@ -249,7 +252,7 @@
 
     /* ── SUBMENU CONSTRUIRE ── */
     .build-menu {
-      position: fixed; z-index: 95;
+      position: fixed; z-index: 10;
       background: var(--surface);
       border: 1px solid var(--border);
       border-left: 3px solid var(--accent);
@@ -294,7 +297,7 @@
       padding: 8px 16px; font-family: var(--mono); font-size: 10px;
       color: var(--muted); letter-spacing: 2px; cursor: pointer;
       text-align: center; border-top: 1px solid var(--border);
-      transition: color .12s;
+      transition: color .12s; user-select: none;
     }
     .build-menu-close:hover { color: var(--danger); }
 
