@@ -14,42 +14,24 @@
       --danger: #c84b4b; --success: #4bc88a; --text: #d4d8e0; --muted: #5a6070;
       --mono: 'Share Tech Mono', monospace; --sans: 'Barlow Condensed', sans-serif;
     }
-    body {
-      background: var(--bg); color: var(--text); font-family: var(--sans);
-      min-height: 100vh; overflow: hidden; position: relative;
-    }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow: hidden; position: relative; }
     body::before {
       content: ''; position: fixed; inset: 0;
-      background-image: linear-gradient(rgba(200,168,75,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(200,168,75,0.03) 1px, transparent 1px);
+      background-image: linear-gradient(rgba(200,168,75,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(200,168,75,0.03) 1px, transparent 1px);
       background-size: 40px 40px; pointer-events: none; z-index: 0;
     }
-
-    /* ── CONN ──f */
-    .conn-indicator {
-      position: fixed; top: 12px; right: 16px; z-index: 100;
-      display: flex; align-items: center; gap: 8px;
-      font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px;
-    }
+    .conn-indicator { position: fixed; top: 12px; right: 16px; z-index: 100; display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; }
     .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
     .conn-dot.on { background: var(--success); animation: pulse 2s ease-in-out infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-
-    /* ── LOBBY ── */
-    .lobby-wrap {
-      position: relative; z-index: 1; width: 100%; max-width: 560px;
-      padding: 24px 16px; display: flex; flex-direction: column; align-items: center;
-      margin: 0 auto; min-height: 100vh; justify-content: center;
-    }
+    .lobby-wrap { position: relative; z-index: 1; width: 100%; max-width: 560px; padding: 24px 16px; display: flex; flex-direction: column; align-items: center; margin: 0 auto; min-height: 100vh; justify-content: center; }
     .header { width: 100%; text-align: center; margin-bottom: 40px; }
     .header-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 4px; color: var(--accent); opacity: .7; margin-bottom: 10px; }
     .header h1 { font-family: var(--sans); font-size: 52px; font-weight: 700; letter-spacing: 6px; text-transform: uppercase; color: #fff; line-height: 1; }
     .header h1 span { color: var(--accent); }
     .header-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 3px; margin-top: 8px; }
     .corners { position: relative; width: 100%; padding: 2px; }
-    .corners::before,.corners::after,.corners>.c3::before,.corners>.c3::after {
-      content:'';position:absolute;width:12px;height:12px;border-color:var(--accent);border-style:solid;opacity:.5;
-    }
+    .corners::before,.corners::after,.corners>.c3::before,.corners>.c3::after { content:'';position:absolute;width:12px;height:12px;border-color:var(--accent);border-style:solid;opacity:.5; }
     .corners::before{top:0;left:0;border-width:1px 0 0 1px} .corners::after{top:0;right:0;border-width:1px 1px 0 0}
     .corners>.c3::before{bottom:0;left:0;border-width:0 0 1px 1px} .corners>.c3::after{bottom:0;right:0;border-width:0 1px 1px 0}
     .panel { background:var(--surface);border:1px solid var(--border);padding:32px;width:100%;display:none;flex-direction:column;gap:20px;animation:fadeIn .25s ease; }
@@ -91,62 +73,25 @@
     @keyframes scan{0%{transform:scaleX(0)}50%{transform:scaleX(1)}100%{transform:scaleX(0)}}
     .blink{animation:blink 1.2s step-end infinite}
     @keyframes blink{50%{opacity:0}}
-
-    /* ── GAME ── */
-    #game-screen {
-      display: none; position: fixed; inset: 0; z-index: 10;
-      flex-direction: column;
-    }
+    #game-screen { display: none; position: fixed; inset: 0; z-index: 10; flex-direction: column; }
     #game-screen.active { display: flex; }
-
-    /* HUD top */
-    .hud-top {
-      display: flex; align-items: center; gap: 16px;
-      padding: 10px 16px; background: rgba(10,12,14,0.92);
-      border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap;
-    }
+    .hud-top { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: rgba(10,12,14,0.92); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
     .hud-title { font-family: var(--sans); font-size: 22px; font-weight: 700; letter-spacing: 4px; color: #fff; }
     .hud-title span { color: var(--accent); }
     .hud-players { display: flex; gap: 10px; flex: 1; flex-wrap: wrap; }
-    .hud-player {
-      display: flex; align-items: center; gap: 6px;
-      background: var(--surface2); border: 1px solid var(--border);
-      padding: 4px 10px; border-radius: 2px;
-    }
+    .hud-player { display: flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border); padding: 4px 10px; border-radius: 2px; }
     .hud-player-dot { width: 10px; height: 10px; border-radius: 50%; }
     .hud-player-name { font-family: var(--mono); font-size: 11px; color: var(--text); }
     .hud-player-res { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-left: 4px; }
     .hud-me { border-color: var(--accent) !important; }
-    .hud-info {
-      font-family: var(--mono); font-size: 10px; color: var(--muted);
-      letter-spacing: 2px; margin-left: auto;
-    }
+    .hud-info { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; margin-left: auto; }
     .hud-info span { color: var(--accent); }
-
-    /* Canvas */
-    #game-canvas-wrap {
-      flex: 1; position: relative; overflow: hidden; cursor: crosshair;
-    }
+    #game-canvas-wrap { flex: 1; position: relative; overflow: hidden; cursor: crosshair; }
     #game-canvas { display: block; }
-
-    /* Tooltip */
-    .tile-tooltip {
-      position: fixed; background: var(--surface); border: 1px solid var(--border);
-      padding: 6px 12px; font-family: var(--mono); font-size: 11px; color: var(--text);
-      pointer-events: none; display: none; z-index: 50; letter-spacing: 1px;
-    }
-
-    /* ── RESOURCES BAR ── */
-    .hud-bottom {
-      padding: 8px 16px; background: rgba(10,12,14,0.95);
-      border-top: 1px solid var(--border); display: flex; align-items: center;
-      gap: 16px; flex-shrink: 0; flex-wrap: wrap;
-    }
+    .tile-tooltip { position: fixed; background: var(--surface); border: 1px solid var(--border); padding: 6px 12px; font-family: var(--mono); font-size: 11px; color: var(--text); pointer-events: none; display: none; z-index: 50; letter-spacing: 1px; }
+    .hud-bottom { padding: 8px 16px; background: rgba(10,12,14,0.95); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 16px; flex-shrink: 0; flex-wrap: wrap; }
     .res-group { display: flex; gap: 12px; flex-wrap: wrap; }
-    .res-item {
-      display: flex; align-items: center; gap: 6px;
-      font-family: var(--mono); font-size: 12px; letter-spacing: 1px;
-    }
+    .res-item { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; letter-spacing: 1px; }
     .res-icon { font-size: 14px; }
     .res-label { color: var(--muted); font-size: 10px; letter-spacing: 2px; }
     .res-value { color: var(--text); font-weight: bold; }
@@ -154,179 +99,42 @@
     .res-value.mat { color: #7ec8a0; }
     .res-value.mec { color: #8ab4e8; }
     .res-value.fuel { color: #e8a87c; }
-      .capture-hint {
-          font-family: var(--mono);
-          font-size: 10px;
-          color: var(--muted);
-          letter-spacing: 2px;
-          flex: 1;
-      }
-    .btn-leave {
-      font-family: var(--sans); font-size: 13px; font-weight: 600; letter-spacing: 2px;
-      padding: 8px 16px; border: 1px solid var(--border); color: var(--muted);
-      background: transparent; cursor: pointer; transition: all .15s;
-    }
+    .capture-hint { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; flex: 1; }
+    .btn-leave { font-family: var(--sans); font-size: 13px; font-weight: 600; letter-spacing: 2px; padding: 8px 16px; border: 1px solid var(--border); color: var(--muted); background: transparent; cursor: pointer; transition: all .15s; }
     .btn-leave:hover { color: var(--danger); border-color: var(--danger); }
-
-    /* ── WHEEL MENU ── */
-    .wheel-overlay {
-      position: fixed; inset: 0; z-index: 80;
-      pointer-events: none;
-    }
-    .wheel-overlay.active { pointer-events: all; cursor: default; }
-
-    .wheel-bg-click {
-      position: absolute; inset: 0;
-      z-index: 1; /* en dessous de tout le reste */
-      cursor: default;
-    }
-
-    .wheel-container {
-      position: absolute;
-      transform: translate(-50%, -50%);
-      z-index: 3;
-    }
-
-    /* Centre */
-    .wheel-center {
-      position: absolute;
-      width: 52px; height: 52px;
-      border-radius: 50%;
-      background: var(--surface);
-      border: 2px solid var(--accent);
-      transform: translate(-50%, -50%);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 20px;
-      z-index: 2;
-      box-shadow: 0 0 20px rgba(200,168,75,0.3);
-    }
-
-    /* Segments de la roue */
-    .wheel-segment {
-      position: absolute;
-      transform: translate(-50%, -50%);
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 4px;
-      cursor: pointer;
-      transition: all .15s;
-      z-index: 3;
-    }
-
-    .wheel-segment-btn {
-      width: 64px; height: 64px;
-      border-radius: 50%;
-      background: var(--surface2);
-      border: 2px solid var(--border);
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 3px;
-      cursor: pointer;
-      transition: all .2s;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-    }
-    .wheel-segment-btn:hover {
-      border-color: var(--accent);
-      background: #1e2430;
-      transform: scale(1.12);
-      box-shadow: 0 0 16px rgba(200,168,75,0.25);
-    }
+    .wheel-overlay { position: fixed; inset: 0; z-index: 80; pointer-events: none; }
+    .wheel-overlay.active { pointer-events: all; }
+    .wheel-bg-click { position: absolute; inset: 0; z-index: 1; }
+    .wheel-container { position: absolute; transform: translate(-50%, -50%); z-index: 3; animation: wheelIn .18s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes wheelIn { from{opacity:0;transform:translate(-50%,-50%) scale(0.6)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
+    .wheel-center { position: absolute; width: 52px; height: 52px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; font-size: 20px; z-index: 2; box-shadow: 0 0 20px rgba(200,168,75,0.3); }
+    .wheel-segment { position: absolute; transform: translate(-50%, -50%); z-index: 3; }
+    .wheel-segment-btn { width: 64px; height: 64px; border-radius: 50%; background: var(--surface2); border: 2px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: pointer; transition: all .2s; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+    .wheel-segment-btn:hover { border-color: var(--accent); background: #1e2430; transform: scale(1.12); }
     .wheel-segment-btn .seg-icon { font-size: 22px; line-height: 1; }
-    .wheel-segment-btn .seg-label {
-      font-family: var(--mono); font-size: 8px; letter-spacing: 1px;
-      color: var(--muted); text-align: center; line-height: 1.1;
-    }
+    .wheel-segment-btn .seg-label { font-family: var(--mono); font-size: 8px; letter-spacing: 1px; color: var(--muted); text-align: center; }
     .wheel-segment-btn:hover .seg-label { color: var(--accent); }
-
-    /* Connecteur roue */
-    .wheel-line {
-      position: absolute;
-      transform-origin: 0 50%;
-      height: 1px;
-      background: var(--border);
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-      opacity: 0.5;
-    }
-
-    /* Animation roue */
-    @keyframes wheelIn {
-      from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
-      to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-    }
-    .wheel-container { animation: wheelIn .18s cubic-bezier(.34,1.56,.64,1); }
-
-    /* ── SUBMENU CONSTRUIRE ── */
-    .build-menu {
-      position: fixed; z-index: 10;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--accent);
-      min-width: 280px;
-      display: none;
-      flex-direction: column;
-      animation: fadeIn .15s ease;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-    }
+    .build-menu { position: fixed; z-index: 90; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); min-width: 280px; display: none; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
     .build-menu.active { display: flex; }
-    .build-menu-title {
-      font-family: var(--mono); font-size: 10px; letter-spacing: 3px;
-      color: var(--accent); padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface2);
-    }
-    .build-item {
-      display: flex; flex-direction: column; gap: 6px;
-      padding: 14px 16px; cursor: pointer;
-      border-bottom: 1px solid var(--border);
-      transition: background .12s;
-    }
-    .build-item:last-child { border-bottom: none; }
+    .build-menu-title { font-family: var(--mono); font-size: 10px; letter-spacing: 3px; color: var(--accent); padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+    .build-item { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background .12s; }
     .build-item:hover { background: var(--surface2); }
     .build-item.disabled { opacity: .45; cursor: not-allowed; }
     .build-item.disabled:hover { background: transparent; }
-    .build-item-name {
-      font-family: var(--sans); font-size: 16px; font-weight: 600;
-      letter-spacing: 2px; color: var(--text);
-    }
-    .build-item-cost {
-      display: flex; gap: 12px; flex-wrap: wrap;
-    }
-    .build-cost-tag {
-      font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
-      padding: 2px 8px; border: 1px solid;
-    }
+    .build-item-name { font-family: var(--sans); font-size: 16px; font-weight: 600; letter-spacing: 2px; color: var(--text); }
+    .build-item-cost { display: flex; gap: 12px; flex-wrap: wrap; }
+    .build-cost-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; padding: 2px 8px; border: 1px solid; }
     .build-cost-tag.gold { color: var(--accent); border-color: var(--accent); }
     .build-cost-tag.mat { color: #7ec8a0; border-color: #7ec8a0; }
     .build-cost-tag.insufficient { color: var(--danger); border-color: var(--danger); text-decoration: line-through; }
-    .build-menu-close {
-      padding: 8px 16px; font-family: var(--mono); font-size: 10px;
-      color: var(--muted); letter-spacing: 2px; cursor: pointer;
-      text-align: center; border-top: 1px solid var(--border);
-      transition: color .12s; user-select: none;
-    }
+    .build-menu-close { padding: 8px 16px; font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; cursor: pointer; text-align: center; border-top: 1px solid var(--border); transition: color .12s; user-select: none; }
     .build-menu-close:hover { color: var(--danger); }
-
-    /* ── BÂTIMENT SUR HEXAGONE ── */
-    .building-icon { pointer-events: none; }
-
-    /* Notification flottante */
-    .notif {
-      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-      background: var(--surface); border: 1px solid var(--border);
-      font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
-      padding: 10px 20px; color: var(--text); z-index: 200;
-      animation: notifIn .2s ease, notifOut .3s ease 1.7s forwards;
-      white-space: nowrap;
-    }
+    .notif { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); font-family: var(--mono); font-size: 11px; letter-spacing: 2px; padding: 10px 20px; color: var(--text); z-index: 200; animation: notifIn .2s ease, notifOut .3s ease 1.7s forwards; white-space: nowrap; }
     .notif.success { border-left: 3px solid var(--success); color: var(--success); }
     .notif.error { border-left: 3px solid var(--danger); color: var(--danger); }
     @keyframes notifIn { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
     @keyframes notifOut { from{opacity:1} to{opacity:0} }
-
-    /* Victory overlay */
-    .victory-overlay {
-      display: none; position: fixed; inset: 0; z-index: 200;
-      background: rgba(10,12,14,0.92); align-items: center; justify-content: center; flex-direction: column; gap: 24px;
-    }
+    .victory-overlay { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(10,12,14,0.92); align-items: center; justify-content: center; flex-direction: column; gap: 24px; }
     .victory-overlay.active { display: flex; animation: fadeIn .5s ease; }
     .victory-title { font-family: var(--sans); font-size: 64px; font-weight: 700; letter-spacing: 8px; color: var(--accent); }
     .victory-name { font-family: var(--mono); font-size: 20px; letter-spacing: 4px; color: var(--text); }
@@ -341,7 +149,6 @@
   <span id="conn-label">HORS LIGNE</span>
 </div>
 
-<!-- LOBBY -->
 <div class="lobby-wrap" id="lobby-wrap">
   <div class="header">
     <div class="header-tag">// TACTICAL SYSTEM v0.3 //</div>
@@ -400,7 +207,6 @@
   </div>
 </div>
 
-<!-- GAME SCREEN -->
 <div id="game-screen">
   <div class="hud-top">
     <div class="hud-title">FRONT<span>LINE</span></div>
@@ -413,39 +219,20 @@
   <div class="tile-tooltip" id="tile-tooltip"></div>
   <div class="hud-bottom">
     <div class="res-group">
-      <div class="res-item">
-        <span class="res-icon">💰</span>
-        <span class="res-label">ARGENT</span>
-        <span class="res-value gold" id="res-gold">500</span>
-      </div>
-      <div class="res-item">
-        <span class="res-icon">🪨</span>
-        <span class="res-label">MATÉRIAUX</span>
-        <span class="res-value mat" id="res-mat">500</span>
-      </div>
-      <div class="res-item">
-        <span class="res-icon">⚙️</span>
-        <span class="res-label">MÉCANISME</span>
-        <span class="res-value mec" id="res-mec">500</span>
-      </div>
-      <div class="res-item">
-        <span class="res-icon">⛽</span>
-        <span class="res-label">FUEL</span>
-        <span class="res-value fuel" id="res-fuel">500</span>
-      </div>
+      <div class="res-item"><span class="res-icon">💰</span><span class="res-label">ARGENT</span><span class="res-value gold" id="res-gold">0</span></div>
+      <div class="res-item"><span class="res-icon">🪨</span><span class="res-label">MATÉRIAUX</span><span class="res-value mat" id="res-mat">0</span></div>
+      <div class="res-item"><span class="res-icon">⚙️</span><span class="res-label">MÉCANISME</span><span class="res-value mec" id="res-mec">0</span></div>
+      <div class="res-item"><span class="res-icon">⛽</span><span class="res-label">FUEL</span><span class="res-value fuel" id="res-fuel">0</span></div>
+      <div class="res-item"><span class="res-icon">🪖</span><span class="res-label">TROUPES</span><span class="res-value" style="color:#e8a87c" id="res-troops">0</span></div>
     </div>
-    <div class="capture-hint" id="bottom-hint">CLIC sur un hex adjacent pour capturer (5💰) · CLIC sur votre hex pour construire</div>
+    <div class="capture-hint">CLIC hex adjacent = capturer (5💰) · CLIC votre hex = construire</div>
     <button class="btn-leave" onclick="leaveRoom()">QUITTER</button>
   </div>
 </div>
 
-<!-- ROUE CONTEXTUELLE + BUILD MENU (même overlay) -->
 <div class="wheel-overlay" id="wheel-overlay">
   <div class="wheel-bg-click" id="wheel-bg-click"></div>
-  <div class="wheel-container" id="wheel-container">
-    <!-- entièrement généré par JS -->
-  </div>
-  <!-- Build menu à l'intérieur de l'overlay pour être au-dessus du bg-click -->
+  <div class="wheel-container" id="wheel-container"></div>
   <div class="build-menu" id="build-menu">
     <div class="build-menu-title">🛠️ CONSTRUIRE</div>
     <div id="build-items"></div>
@@ -453,7 +240,6 @@
   </div>
 </div>
 
-<!-- VICTORY -->
 <div class="victory-overlay" id="victory-overlay">
   <div class="victory-title">VICTOIRE</div>
   <div class="victory-name" id="victory-name"></div>
@@ -461,28 +247,20 @@
 </div>
 
 <script>
-// ─── SOCKET ──────────────────────────────────────────────────────────────────
 const SERVER_URL = window.location.hostname === 'localhost' ? '' : window.location.origin;
 const socket = io(SERVER_URL);
 
-let myId = null;
-let myColor = null;
-let currentRoom = null;
-let gameMap = null;
-let gamePlayers = {};
-let myResources = { gold: 500, mat: 500, mec: 500, fuel: 500 };
+let myId = null, myColor = null, currentRoom = null;
+let gameMap = null, gamePlayers = {};
+let myResources = { gold: 0, mat: 0, mec: 0, fuel: 0 };
+let myTroops = 0;
 
 socket.on('connect', () => { myId = socket.id; setConn(true); });
 socket.on('disconnect', () => setConn(false));
 socket.on('lobby:update', (room) => { currentRoom = room; renderLobby(room); });
 socket.on('game:start', (data) => initGame(data));
 socket.on('game:myId', (data) => { myId = data.myId; myColor = data.color; });
-socket.on('map:update', (tiles) => {
-  if (gameMap) {
-    Object.assign(gameMap.tiles, tiles);
-    drawMap();
-  }
-});
+socket.on('map:update', (tiles) => { if (gameMap) { Object.assign(gameMap.tiles, tiles); drawMap(); } });
 socket.on('game:resources', (res) => {
   for (const [id, amount] of Object.entries(res)) {
     if (gamePlayers[id]) gamePlayers[id].resources = amount;
@@ -495,14 +273,12 @@ socket.on('game:resources', (res) => {
 });
 socket.on('game:tick', (data) => { document.getElementById('hud-tick').textContent = data.tick; });
 socket.on('game:over', (data) => {
-  const overlay = document.getElementById('victory-overlay');
   const isMe = data.winner.id === myId;
   document.getElementById('victory-name').innerHTML =
     `<span style="color:${data.winner.color}">${data.winner.name}</span> CONTRÔLE LE TERRITOIRE${isMe ? '<br><span style="color:var(--success);font-size:14px">C\'EST TOI !</span>' : ''}`;
-  overlay.classList.add('active');
+  document.getElementById('victory-overlay').classList.add('active');
 });
 
-// ─── UI HELPERS ──────────────────────────────────────────────────────────────
 function setConn(on) {
   document.getElementById('conn-dot').className = 'conn-dot' + (on ? ' on' : '');
   document.getElementById('conn-label').textContent = on ? 'EN LIGNE' : 'HORS LIGNE';
@@ -514,12 +290,9 @@ function showPanel(id) {
 function goCreate() {
   socket.emit('room:create', {}, (res) => {
     if (!res.success) return;
-    myColor = res.me.color;
-    currentRoom = res.room;
+    myColor = res.me.color; currentRoom = res.room;
     document.getElementById('room-code').textContent = res.room.code;
-    document.getElementById('copy-hint').textContent = '[ COPIER LE CODE ]';
-    renderLobby(res.room);
-    showPanel('create');
+    renderLobby(res.room); showPanel('create');
   });
 }
 function goJoin() {
@@ -532,28 +305,25 @@ function doJoin() {
   if (code.length !== 4) { showJoinError('CODE INVALIDE — 4 CARACTÈRES REQUIS'); return; }
   socket.emit('room:join', { code }, (res) => {
     if (!res.success) { showJoinError(res.error); return; }
-    myColor = res.me.color;
-    currentRoom = res.room;
+    myColor = res.me.color; currentRoom = res.room;
     document.getElementById('waiting-status').textContent = `CONNECTÉ AU SALON ${res.room.code}`;
-    renderLobby(res.room);
-    showPanel('waiting');
+    renderLobby(res.room); showPanel('waiting');
   });
 }
 function leaveRoom() {
   socket.emit('room:leave');
   currentRoom = null; gameMap = null; gamePlayers = {};
-  myResources = { gold: 500, mat: 500, mec: 500, fuel: 500 };
+  myResources = { gold: 0, mat: 0, mec: 0, fuel: 0 }; myTroops = 0;
   document.getElementById('game-screen').classList.remove('active');
   document.getElementById('lobby-wrap').style.display = 'flex';
   document.getElementById('victory-overlay').classList.remove('active');
-  closeWheel(); closeBuildMenu();
-  showPanel('menu');
+  closeAll(); showPanel('menu');
 }
 function startGame() {
   socket.emit('game:start', {}, (res) => { if (!res?.success) alert(res?.error || 'Erreur'); });
 }
 function copyCode() {
-  navigator.clipboard.writeText(document.getElementById('room-code').textContent).catch(()=>{});
+  navigator.clipboard.writeText(document.getElementById('room-code').textContent).catch(() => {});
   document.getElementById('copy-hint').textContent = '[ ✓ COPIÉ ! ]';
   setTimeout(() => document.getElementById('copy-hint').textContent = '[ COPIER LE CODE ]', 2000);
 }
@@ -573,11 +343,10 @@ function renderLobby(room) {
     room.players.forEach(p => {
       const isMe = p.id === myId;
       const row = document.createElement('div');
-      row.className = 'player-row';
-      row.style.borderLeftColor = p.color;
-      const badges = (p.isHost ? '<div class="player-badge" style="color:var(--accent)">HOST</div>' : '') +
-                     (isMe ? '<div class="player-badge" style="color:var(--success)">VOUS</div>' : '');
-      row.innerHTML = `<div class="player-dot" style="background:${p.color}"></div><div class="player-name">${p.name}</div>${badges}`;
+      row.className = 'player-row'; row.style.borderLeftColor = p.color;
+      row.innerHTML = `<div class="player-dot" style="background:${p.color}"></div><div class="player-name">${p.name}</div>` +
+        (p.isHost ? '<div class="player-badge" style="color:var(--accent)">HOST</div>' : '') +
+        (isMe ? '<div class="player-badge" style="color:var(--success)">VOUS</div>' : '');
       list.appendChild(row);
     });
   });
@@ -586,151 +355,23 @@ function renderLobby(room) {
   document.getElementById('waiting-count').textContent = count;
   const btn = document.getElementById('start-btn');
   const isHost = room.hostId === myId;
-  const canStart = room.players.length >= 2 && isHost;
-  btn.disabled = !canStart;
+  btn.disabled = !(room.players.length >= 2 && isHost);
   btn.textContent = !isHost ? 'SEUL L\'HÔTE PEUT LANCER' :
-    room.players.length < 2 ? 'EN ATTENTE D\'UN ADVERSAIRE...' :
-    `▶ COMMENCER (${room.players.length} JOUEURS)`;
+    room.players.length < 2 ? 'EN ATTENTE D\'UN ADVERSAIRE...' : `▶ COMMENCER (${room.players.length} JOUEURS)`;
 }
-
 function updateResDisplay() {
   document.getElementById('res-gold').textContent = myResources.gold ?? 0;
   document.getElementById('res-mat').textContent = myResources.mat ?? 0;
   document.getElementById('res-mec').textContent = myResources.mec ?? 0;
   document.getElementById('res-fuel').textContent = myResources.fuel ?? 0;
+  document.getElementById('res-troops').textContent = myTroops;
 }
-
 function showNotif(msg, type = 'success') {
   const el = document.createElement('div');
-  el.className = `notif ${type}`;
-  el.textContent = msg;
+  el.className = `notif ${type}`; el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2100);
 }
-
-// ─── HEX MAP ─────────────────────────────────────────────────────────────────
-
-const HEX_SIZE = 32;
-let canvas, ctx, canvasWrap;
-let offsetX = 0, offsetY = 0;
-let isDragging = false, dragStart = null, dragOffset = null;
-let hoveredTile = null;
-let selectedTile = null; // tile sélectionnée pour la roue
-
-// Définitions des bâtiments
-const BUILDINGS = {
-  recruit_post: {
-    id: 'recruit_post',
-    name: 'Poste de recrutement',
-    icon: '📑',
-    cost: { gold: 325, mat: 450 },
-    emoji: '📑',
-  }
-};
-
-function hexToPixel(col, row) {
-  const w = HEX_SIZE * Math.sqrt(3);
-  const h = HEX_SIZE * 2;
-  const x = col * w + (row % 2 === 1 ? w / 2 : 0);
-  const y = row * h * 0.75;
-  return { x, y };
-}
-
-function pixelToHex(px, py) {
-  if (!gameMap) return null;
-  let bestKey = null, bestDist = Infinity;
-  for (const key of Object.keys(gameMap.tiles)) {
-    const tile = gameMap.tiles[key];
-    if (!tile.active) continue;
-    const { x, y } = hexToPixel(tile.col, tile.row);
-    const dx = px - x, dy = py - y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist < bestDist && dist < HEX_SIZE * 1.1) { bestDist = dist; bestKey = key; }
-  }
-  return bestKey;
-}
-
-function drawHex(cx, cy, size, fillColor, strokeColor, alpha = 1) {
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const angle = Math.PI / 180 * (60 * i - 30);
-    const x = cx + size * Math.cos(angle);
-    const y = cy + size * Math.sin(angle);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fillStyle = fillColor;
-  ctx.fill();
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawMap() {
-  if (!gameMap || !canvas) return;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.save();
-  ctx.translate(offsetX, offsetY);
-
-  for (const tile of Object.values(gameMap.tiles)) {
-    if (!tile.active) continue;
-    const { x, y } = hexToPixel(tile.col, tile.row);
-    const key = `${tile.col},${tile.row}`;
-    const isHovered = hoveredTile === key;
-    const isSelected = selectedTile === key;
-    const isOwned = tile.owner !== null;
-    const isAdj = myId && isAdjacentToPlayer_client(tile.col, tile.row);
-
-    let fill = '#1a2030';
-    let stroke = '#2a3040';
-
-    if (isOwned) { fill = tile.color + 'cc'; stroke = tile.color; }
-    if (tile.owner === myId) { fill = tile.color + 'ee'; stroke = tile.color; }
-    if (isHovered && !isOwned) {
-      fill = isAdj ? '#ffffff22' : '#ffffff0a';
-      stroke = isAdj ? '#ffffff66' : '#ffffff22';
-    }
-    if (isHovered && isOwned && tile.owner !== myId) { fill = tile.color + 'aa'; stroke = '#ffffff88'; }
-    if (isSelected) { stroke = '#ffffff'; fill = tile.owner === myId ? tile.color + 'ff' : '#ffffff22'; }
-
-    drawHex(x, y, HEX_SIZE - 2, fill, stroke);
-
-    // Indicateur de capture disponible
-    if (isAdj && !isOwned && !isHovered) drawHex(x, y, HEX_SIZE * 0.3, myColor + '55', myColor + '88');
-    if (isAdj && isOwned && tile.owner !== myId && !isHovered) drawHex(x, y, HEX_SIZE * 0.25, '#ff000033', '#ff000066');
-
-    // Icône bâtiment
-    if (tile.building) {
-      const b = BUILDINGS[tile.building];
-      if (b) {
-        ctx.font = `${HEX_SIZE * 0.6}px serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.globalAlpha = 1;
-        ctx.fillText(b.emoji, x, y);
-      }
-    }
-  }
-
-  ctx.restore();
-}
-
-function isAdjacentToPlayer_client(col, row) {
-  if (!gameMap || !myId) return false;
-  const dirs_even = [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]];
-  const dirs_odd  = [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
-  const dirs = row % 2 === 0 ? dirs_even : dirs_odd;
-  return dirs.some(([dc, dr]) => {
-    const nc = col + dc, nr = row + dr;
-    if (nc < 0 || nr < 0 || nc >= gameMap.cols || nr >= gameMap.rows) return false;
-    const t = gameMap.tiles[`${nc},${nr}`];
-    return t && t.owner === myId;
-  });
-}
-
 function updateHudPlayers() {
   const hud = document.getElementById('hud-players');
   hud.innerHTML = '';
@@ -739,264 +380,223 @@ function updateHudPlayers() {
     const div = document.createElement('div');
     div.className = 'hud-player' + (p.id === myId ? ' hud-me' : '');
     const gold = typeof p.resources === 'object' ? (p.resources?.gold ?? 0) : (p.resources ?? 0);
-    div.innerHTML = `<div class="hud-player-dot" style="background:${p.color}"></div>
-      <div class="hud-player-name">${p.name}</div>
-      <div class="hud-player-res">💰${gold} ▣${owned}</div>`;
+    div.innerHTML = `<div class="hud-player-dot" style="background:${p.color}"></div><div class="hud-player-name">${p.name}</div><div class="hud-player-res">💰${gold} ▣${owned}</div>`;
     hud.appendChild(div);
   }
 }
 
-// ─── ROUE CONTEXTUELLE ────────────────────────────────────────────────────────
+// ─── HEX ─────────────────────────────────────────────────────────────────────
+const HEX_SIZE = 32;
+let canvas, ctx, canvasWrap;
+let offsetX = 0, offsetY = 0;
+let isDragging = false, dragStart = null, dragOffset = null;
+let hoveredTile = null, selectedTile = null;
 
-const WHEEL_CATEGORIES = [
-  { id: 'build', icon: '🛠️', label: 'CONSTRUIRE', angle: -90 },
-];
+const BUILDINGS = {
+  recruit_post: { id: 'recruit_post', name: 'Poste de recrutement', icon: '📑', cost: { gold: 325, mat: 450 }, emoji: '📑' }
+};
 
+function hexToPixel(col, row) {
+  return {
+    x: col * HEX_SIZE * Math.sqrt(3) + (row % 2 === 1 ? HEX_SIZE * Math.sqrt(3) / 2 : 0),
+    y: row * HEX_SIZE * 2 * 0.75
+  };
+}
+function pixelToHex(px, py) {
+  if (!gameMap) return null;
+  let bestKey = null, bestDist = Infinity;
+  for (const key of Object.keys(gameMap.tiles)) {
+    const tile = gameMap.tiles[key];
+    if (!tile.active) continue;
+    const { x, y } = hexToPixel(tile.col, tile.row);
+    const dist = Math.sqrt((px-x)**2 + (py-y)**2);
+    if (dist < bestDist && dist < HEX_SIZE * 1.1) { bestDist = dist; bestKey = key; }
+  }
+  return bestKey;
+}
+function drawHex(cx, cy, size, fill, stroke, alpha = 1) {
+  ctx.save(); ctx.globalAlpha = alpha; ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30);
+    i === 0 ? ctx.moveTo(cx + size * Math.cos(a), cy + size * Math.sin(a))
+            : ctx.lineTo(cx + size * Math.cos(a), cy + size * Math.sin(a));
+  }
+  ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+  ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
+}
+function drawMap() {
+  if (!gameMap || !canvas) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save(); ctx.translate(offsetX, offsetY);
+  for (const tile of Object.values(gameMap.tiles)) {
+    if (!tile.active) continue;
+    const { x, y } = hexToPixel(tile.col, tile.row);
+    const key = `${tile.col},${tile.row}`;
+    const isAdj = myId && isAdjacentToPlayer_client(tile.col, tile.row);
+    let fill = '#1a2030', stroke = '#2a3040';
+    if (tile.owner) { fill = tile.color + 'cc'; stroke = tile.color; }
+    if (tile.owner === myId) { fill = tile.color + 'ee'; }
+    if (hoveredTile === key && !tile.owner) { fill = isAdj ? '#ffffff22' : '#ffffff0a'; stroke = isAdj ? '#ffffff66' : '#ffffff22'; }
+    if (hoveredTile === key && tile.owner && tile.owner !== myId) { fill = tile.color + 'aa'; stroke = '#ffffff88'; }
+    if (selectedTile === key) { stroke = '#ffffff'; fill = tile.owner === myId ? tile.color + 'ff' : '#ffffff22'; }
+    drawHex(x, y, HEX_SIZE - 2, fill, stroke);
+    if (isAdj && !tile.owner && hoveredTile !== key) drawHex(x, y, HEX_SIZE * 0.3, myColor + '55', myColor + '88');
+    if (isAdj && tile.owner && tile.owner !== myId && hoveredTile !== key) drawHex(x, y, HEX_SIZE * 0.25, '#ff000033', '#ff000066');
+    if (tile.building && BUILDINGS[tile.building]) {
+      ctx.font = `${HEX_SIZE * 0.6}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.globalAlpha = 1;
+      ctx.fillText(BUILDINGS[tile.building].emoji, x, y);
+    }
+  }
+  ctx.restore();
+}
+function isAdjacentToPlayer_client(col, row) {
+  if (!gameMap || !myId) return false;
+  const dirs = col % 2 === 0 ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]] : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
+  return dirs.some(([dc, dr]) => { const t = gameMap.tiles[`${col+dc},${row+dr}`]; return t && t.owner === myId; });
+}
+
+// ─── WHEEL & BUILD ────────────────────────────────────────────────────────────
 let wheelTargetKey = null;
 
-function openWheel(screenX, screenY, tileKey) {
-  closeWheel();
-  closeBuildMenu();
-  wheelTargetKey = tileKey;
-  selectedTile = tileKey;
-  drawMap();
-
-  const overlay = document.getElementById('wheel-overlay');
-  const container = document.getElementById('wheel-container');
-  container.style.left = screenX + 'px';
-  container.style.top = screenY + 'px';
-
-  // Vider et reconstruire entièrement (bug 1 : center généré dynamiquement)
-  container.innerHTML = '';
-  const center = document.createElement('div');
-  center.className = 'wheel-center';
-  center.textContent = '🏠';
-  container.appendChild(center);
-
-  // Générer les segments
-  const radius = 80;
-  WHEEL_CATEGORIES.forEach((cat) => {
-    const rad = (cat.angle * Math.PI) / 180;
-    const sx = Math.cos(rad) * radius;
-    const sy = Math.sin(rad) * radius;
-
-    const seg = document.createElement('div');
-    seg.className = 'wheel-segment';
-    seg.style.left = (sx) + 'px';
-    seg.style.top = (sy) + 'px';
-
-    const btn = document.createElement('div');
-    btn.className = 'wheel-segment-btn';
-    btn.innerHTML = `<span class="seg-icon">${cat.icon}</span><span class="seg-label">${cat.label}</span>`;
-    btn.onclick = (e) => { e.stopPropagation(); onWheelCategory(cat.id, screenX, screenY); };
-    seg.appendChild(btn);
-    container.appendChild(seg);
-  });
-
-  // Bug 2 : le bg-click ferme roue ET build-menu
-  document.getElementById('wheel-bg-click').onclick = () => { closeWheel(); closeBuildMenu(); };
-
-  overlay.classList.add('active');
-}
-
-function closeWheel() {
-  // Vider le container de la roue sans toucher à l'overlay si build-menu est actif
-  document.getElementById('wheel-container').innerHTML = '';
-  const buildMenuActive = document.getElementById('build-menu').classList.contains('active');
-  if (!buildMenuActive) {
-    document.getElementById('wheel-overlay').classList.remove('active');
-    wheelTargetKey = null;
-    if (selectedTile) { selectedTile = null; drawMap(); }
-  }
-}
-
-function onWheelCategory(catId, sx, sy) {
-  closeWheel();
-  if (catId === 'build') openBuildMenu(sx, sy);
-}
-
-// ─── MENU CONSTRUIRE ─────────────────────────────────────────────────────────
-
-function openBuildMenu(screenX, screenY) {
+function closeAll() {
   const menu = document.getElementById('build-menu');
-  const itemsEl = document.getElementById('build-items');
-  itemsEl.innerHTML = '';
-
-  Object.values(BUILDINGS).forEach(b => {
-    const canAfford = (myResources.gold >= (b.cost.gold || 0)) && (myResources.mat >= (b.cost.mat || 0));
-    const tile = gameMap?.tiles[wheelTargetKey];
-    const alreadyBuilt = tile?.building === b.id;
-
-    const item = document.createElement('div');
-    item.className = 'build-item' + (!canAfford || alreadyBuilt ? ' disabled' : '');
-
-    const costTags = Object.entries(b.cost).map(([type, val]) => {
-      const enough = myResources[type] >= val;
-      const label = { gold: '💰', mat: '🪨', mec: '⚙️', fuel: '⛽' }[type] || type;
-      return `<span class="build-cost-tag ${type} ${!enough ? 'insufficient' : ''}">${label} ${val}</span>`;
-    }).join('');
-
-    item.innerHTML = `
-      <div class="build-item-name">${b.icon} ${b.name}</div>
-      <div class="build-item-cost">${costTags}${alreadyBuilt ? '<span class="build-cost-tag" style="color:var(--success);border-color:var(--success)">DÉJÀ CONSTRUIT</span>' : ''}</div>
-    `;
-
-    if (canAfford && !alreadyBuilt) {
-      item.onclick = () => doBuild(b.id);
-    }
-    itemsEl.appendChild(item);
-  });
-
-  // Positionnement intelligent
-  menu.style.display = 'flex';
-  const rect = menu.getBoundingClientRect();
-  let left = screenX + 20;
-  let top = screenY - 20;
-  if (left + rect.width > window.innerWidth - 10) left = screenX - rect.width - 20;
-  if (top + rect.height > window.innerHeight - 10) top = window.innerHeight - rect.height - 10;
-  menu.style.left = left + 'px';
-  menu.style.top = top + 'px';
-  menu.classList.add('active');
-
-  // Le bg-click de la roue (déjà actif) gère aussi la fermeture du build-menu
-  // On met à jour son handler pour inclure closeBuildMenu
-  document.getElementById('wheel-bg-click').onclick = () => { closeWheel(); closeBuildMenu(); };
-  document.getElementById('wheel-overlay').classList.add('active');
-
-  selectedTile = wheelTargetKey;
-  drawMap();
-}
-
-function closeBuildMenu() {
-  document.getElementById('build-menu').classList.remove('active');
-  document.getElementById('build-menu').style.display = 'none';
+  menu.classList.remove('active'); menu.style.display = 'none';
   document.getElementById('wheel-overlay').classList.remove('active');
   document.getElementById('wheel-container').innerHTML = '';
-  wheelTargetKey = null;
-  selectedTile = null;
+  wheelTargetKey = null; selectedTile = null;
   if (gameMap) drawMap();
 }
 
-// Bouton fermer — stopPropagation pour ne pas déclencher le bg-click
+function openWheel(screenX, screenY, tileKey) {
+  closeAll();
+  wheelTargetKey = tileKey; selectedTile = tileKey; drawMap();
+  const container = document.getElementById('wheel-container');
+  container.style.left = screenX + 'px'; container.style.top = screenY + 'px';
+  container.innerHTML = '';
+  const center = document.createElement('div');
+  center.className = 'wheel-center'; center.textContent = '🏠';
+  container.appendChild(center);
+  const rad = -90 * Math.PI / 180;
+  const seg = document.createElement('div');
+  seg.className = 'wheel-segment';
+  seg.style.left = Math.cos(rad) * 80 + 'px'; seg.style.top = Math.sin(rad) * 80 + 'px';
+  const btn = document.createElement('div');
+  btn.className = 'wheel-segment-btn';
+  btn.innerHTML = '<span class="seg-icon">🛠️</span><span class="seg-label">CONSTRUIRE</span>';
+  btn.onclick = (e) => { e.stopPropagation(); openBuildMenu(screenX, screenY); };
+  seg.appendChild(btn); container.appendChild(seg);
+  document.getElementById('wheel-bg-click').onclick = () => closeAll();
+  document.getElementById('wheel-overlay').classList.add('active');
+}
+
+function openBuildMenu(screenX, screenY) {
+  document.getElementById('wheel-container').innerHTML = '';
+  const menu = document.getElementById('build-menu');
+  const itemsEl = document.getElementById('build-items');
+  itemsEl.innerHTML = '';
+  Object.values(BUILDINGS).forEach(b => {
+    const canAfford = myResources.gold >= (b.cost.gold || 0) && myResources.mat >= (b.cost.mat || 0);
+    const tile = gameMap?.tiles[wheelTargetKey];
+    const alreadyBuilt = tile?.building === b.id;
+    const item = document.createElement('div');
+    item.className = 'build-item' + (!canAfford || alreadyBuilt ? ' disabled' : '');
+    const costTags = Object.entries(b.cost).map(([type, val]) => {
+      const label = { gold: '💰', mat: '🪨', mec: '⚙️', fuel: '⛽' }[type] || type;
+      return `<span class="build-cost-tag ${type} ${myResources[type] < val ? 'insufficient' : ''}">${label} ${val}</span>`;
+    }).join('');
+    item.innerHTML = `<div class="build-item-name">${b.icon} ${b.name}</div>
+      <div class="build-item-cost">${costTags}${alreadyBuilt ? '<span class="build-cost-tag" style="color:var(--success);border-color:var(--success)">DÉJÀ CONSTRUIT</span>' : ''}</div>`;
+    if (canAfford && !alreadyBuilt) item.onclick = () => doBuild(b.id);
+    itemsEl.appendChild(item);
+  });
+  menu.style.display = 'flex';
+  const rect = menu.getBoundingClientRect();
+  let left = screenX + 20, top = screenY - 20;
+  if (left + rect.width > window.innerWidth - 10) left = screenX - rect.width - 20;
+  if (top + rect.height > window.innerHeight - 10) top = window.innerHeight - rect.height - 10;
+  menu.style.left = left + 'px'; menu.style.top = top + 'px';
+  menu.classList.add('active');
+  document.getElementById('wheel-bg-click').onclick = () => closeAll();
+  document.getElementById('wheel-overlay').classList.add('active');
+}
+
 document.getElementById('build-menu-close').addEventListener('click', (e) => {
-  e.stopPropagation();
-  closeWheel();
-  closeBuildMenu();
+  e.stopPropagation(); closeAll();
 });
 
 function doBuild(buildingId) {
   if (!wheelTargetKey) return;
   const tile = gameMap.tiles[wheelTargetKey];
   if (!tile) return;
-
   socket.emit('tile:build', { col: tile.col, row: tile.row, buildingId }, (res) => {
-    if (res?.success) {
-      // ✅ AJOUT IMPORTANT : update local immédiat
-      tile.building = buildingId;
-      drawMap();
-
-      showNotif(`${BUILDINGS[buildingId].icon} ${BUILDINGS[buildingId].name} construit !`, 'success');
-    } else {
-      showNotif(res?.error || 'Construction impossible', 'error');
-    }
+    if (res?.success) { tile.building = buildingId; drawMap(); showNotif(`${BUILDINGS[buildingId].icon} ${BUILDINGS[buildingId].name} construit !`, 'success'); }
+    else showNotif(res?.error || 'Construction impossible', 'error');
   });
+  closeAll();
+}
 
-  closeBuildMenu();
+function openRecruitMenu(tile) {
+  const max = Math.floor(myResources.gold / 20);
+  if (max <= 0) { showNotif('Pas assez d\'argent (20💰 par soldat)', 'error'); return; }
+  const input = prompt(`Combien de troupes recruter ?\n20💰 par soldat | Max: ${max}`);
+  if (input === null) return;
+  const amount = parseInt(input);
+  if (isNaN(amount) || amount <= 0) { showNotif('Nombre invalide', 'error'); return; }
+  if (amount > max) { showNotif(`Maximum ${max} soldats`, 'error'); return; }
+  myResources.gold -= amount * 20;
+  myTroops += amount;
+  updateResDisplay();
+  showNotif(`+${amount} soldats recrutés 🪖`, 'success');
 }
 
 // ─── INIT GAME ───────────────────────────────────────────────────────────────
-
 function initGame(data) {
   gameMap = data.map;
   data.players.forEach(p => { gamePlayers[p.id] = p; });
-
   document.getElementById('lobby-wrap').style.display = 'none';
   document.getElementById('game-screen').classList.add('active');
-
   canvas = document.getElementById('game-canvas');
   canvasWrap = document.getElementById('game-canvas-wrap');
   ctx = canvas.getContext('2d');
 
   function resize() {
-    canvas.width = canvasWrap.clientWidth;
-    canvas.height = canvasWrap.clientHeight;
-    const mapW = gameMap.cols * HEX_SIZE * Math.sqrt(3);
-    const mapH = gameMap.rows * HEX_SIZE * 1.5;
-    offsetX = (canvas.width - mapW) / 2 + HEX_SIZE;
-    offsetY = (canvas.height - mapH) / 2 + HEX_SIZE;
+    canvas.width = canvasWrap.clientWidth; canvas.height = canvasWrap.clientHeight;
+    offsetX = (canvas.width - gameMap.cols * HEX_SIZE * Math.sqrt(3)) / 2 + HEX_SIZE;
+    offsetY = (canvas.height - gameMap.rows * HEX_SIZE * 1.5) / 2 + HEX_SIZE;
     drawMap();
   }
   resize();
   window.addEventListener('resize', resize);
-  updateHudPlayers();
-  updateResDisplay();
+  updateHudPlayers(); updateResDisplay();
 
-function openRecruitMenu(tile) {
-  const max = Math.floor(myResources.gold / 20);
-
-  const input = prompt(`Combien de troupes veux-tu recruter ?\n(20💰 par soldat)\nMax: ${max}`);
-
-  if (input === null) return;
-
-  const amount = parseInt(input);
-
-  if (isNaN(amount) || amount <= 0) {
-    showNotif('Nombre invalide', 'error');
-    return;
-  }
-
-  const cost = amount * 20;
-
-  if (myResources.gold < cost) {
-    showNotif('Pas assez d\'argent', 'error');
-    return;
-  }
-
-  // ✅ Déduire l'argent
-  myResources.gold -= cost;
-  updateResDisplay();
-
-  // ✅ Ajouter les soldats
-  if (!window.myTroops) window.myTroops = 0;
-  window.myTroops += amount;
-
-  updateTroopDisplay();
-
-  showNotif(`+${amount} soldats recrutés`, 'success');
-}
-  // ── Drag & hover ──
   canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
     const px = e.clientX - rect.left - offsetX;
     const py = e.clientY - rect.top - offsetY;
-
+    if (dragStart) {
+      const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
+      if (Math.sqrt(dx*dx + dy*dy) > 5) isDragging = true;
+    }
     if (isDragging && dragStart) {
       offsetX = dragOffset.x + (e.clientX - dragStart.x);
       offsetY = dragOffset.y + (e.clientY - dragStart.y);
-      drawMap();
-      return;
+      drawMap(); return;
     }
-
     const key = pixelToHex(px, py);
     if (key !== hoveredTile) { hoveredTile = key; drawMap(); }
-
     const tooltip = document.getElementById('tile-tooltip');
     if (key && gameMap.tiles[key]) {
       const tile = gameMap.tiles[key];
       const owner = tile.owner ? (gamePlayers[tile.owner]?.name || '?') : 'Neutre';
       const adj = isAdjacentToPlayer_client(tile.col, tile.row);
-      const buildingInfo = tile.building ? ` | ${BUILDINGS[tile.building]?.icon || ''} ${BUILDINGS[tile.building]?.name || ''}` : '';
+      const bInfo = tile.building ? ` | ${BUILDINGS[tile.building]?.emoji} ${BUILDINGS[tile.building]?.name}` : '';
+      let hint = owner + bInfo;
+      if (tile.owner === myId) hint += tile.building === 'recruit_post' ? ' — CLIC pour recruter' : ' — CLIC pour construire';
+      else if (adj) hint += ' — CLIC pour capturer (5💰)';
       tooltip.style.display = 'block';
-      tooltip.style.left = (e.clientX + 12) + 'px';
-      tooltip.style.top = (e.clientY - 10) + 'px';
-      let hint = owner + buildingInfo;
-      if (tile.owner === myId) hint += ' — CLIC pour construire';
-      else if (adj && tile.owner !== myId) hint += ' — CLIC pour capturer (5💰)';
-      tooltip.textContent = hint;
-      tooltip.style.borderColor = tile.color || 'var(--border)';
-    } else {
-      tooltip.style.display = 'none';
-    }
+      tooltip.style.left = (e.clientX + 12) + 'px'; tooltip.style.top = (e.clientY - 10) + 'px';
+      tooltip.textContent = hint; tooltip.style.borderColor = tile.color || 'var(--border)';
+    } else { tooltip.style.display = 'none'; }
   });
 
   canvas.addEventListener('mousedown', (e) => {
@@ -1005,43 +605,30 @@ function openRecruitMenu(tile) {
     dragOffset = { x: offsetX, y: offsetY };
   });
 
-  canvas.addEventListener('mousemove', (e) => {
-    if (dragStart) {
-      const dx = e.clientX - dragStart.x;
-      const dy = e.clientY - dragStart.y;
-      if (Math.sqrt(dx*dx + dy*dy) > 5) isDragging = true;
-    }
-  });
-
   canvas.addEventListener('mouseup', (e) => {
     if (!isDragging && hoveredTile) {
       const tile = gameMap.tiles[hoveredTile];
       if (tile && tile.active) {
         if (tile.owner === myId) {
-  // ✅ Si bâtiment = recrutement → ouvrir menu recrutement
-  if (tile.building === 'recruit_post') {
-    openRecruitMenu(tile);
-  } else {
-    closeWheel(); closeBuildMenu();
-    openWheel(e.clientX, e.clientY, hoveredTile);
-        } else if (tile.owner !== myId) {
-          // Capture si adjacent
+          if (tile.building === 'recruit_post') {
+            openRecruitMenu(tile);
+          } else {
+            closeAll();
+            openWheel(e.clientX, e.clientY, hoveredTile);
+          }
+        } else {
           socket.emit('tile:capture', { col: tile.col, row: tile.row }, (res) => {
             if (!res?.success && res?.error) showNotif(res.error, 'error');
           });
         }
       }
     }
-    isDragging = false;
-    dragStart = null;
+    isDragging = false; dragStart = null;
   });
 
   canvas.addEventListener('mouseleave', () => {
-    hoveredTile = null;
-    document.getElementById('tile-tooltip').style.display = 'none';
-    isDragging = false;
-    dragStart = null;
-    drawMap();
+    hoveredTile = null; document.getElementById('tile-tooltip').style.display = 'none';
+    isDragging = false; dragStart = null; drawMap();
   });
 
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
