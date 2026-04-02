@@ -154,9 +154,13 @@
     .res-value.mat { color: #7ec8a0; }
     .res-value.mec { color: #8ab4e8; }
     .res-value.fuel { color: #e8a87c; }
-    .capture-hint {
-      font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; flex: 1;
-    }
+      .capture-hint {
+          font-family: var(--mono);
+          font-size: 10px;
+          color: var(--muted);
+          letter-spacing: 2px;
+          flex: 1;
+      }
     .btn-leave {
       font-family: var(--sans); font-size: 13px; font-weight: 600; letter-spacing: 2px;
       padding: 8px 16px; border: 1px solid var(--border); color: var(--muted);
@@ -618,9 +622,9 @@ const BUILDINGS = {
   recruit_post: {
     id: 'recruit_post',
     name: 'Poste de recrutement',
-    icon: '🪖',
+    icon: '📑',
     cost: { gold: 325, mat: 450 },
-    emoji: '🪖',
+    emoji: '📑',
   }
 };
 
@@ -887,11 +891,16 @@ function doBuild(buildingId) {
 
   socket.emit('tile:build', { col: tile.col, row: tile.row, buildingId }, (res) => {
     if (res?.success) {
+      // ✅ AJOUT IMPORTANT : update local immédiat
+      tile.building = buildingId;
+      drawMap();
+
       showNotif(`${BUILDINGS[buildingId].icon} ${BUILDINGS[buildingId].name} construit !`, 'success');
     } else {
       showNotif(res?.error || 'Construction impossible', 'error');
     }
   });
+
   closeBuildMenu();
 }
 
@@ -922,6 +931,39 @@ function initGame(data) {
   updateHudPlayers();
   updateResDisplay();
 
+function openRecruitMenu(tile) {
+  const max = Math.floor(myResources.gold / 20);
+
+  const input = prompt(`Combien de troupes veux-tu recruter ?\n(20💰 par soldat)\nMax: ${max}`);
+
+  if (input === null) return;
+
+  const amount = parseInt(input);
+
+  if (isNaN(amount) || amount <= 0) {
+    showNotif('Nombre invalide', 'error');
+    return;
+  }
+
+  const cost = amount * 20;
+
+  if (myResources.gold < cost) {
+    showNotif('Pas assez d\'argent', 'error');
+    return;
+  }
+
+  // ✅ Déduire l'argent
+  myResources.gold -= cost;
+  updateResDisplay();
+
+  // ✅ Ajouter les soldats
+  if (!window.myTroops) window.myTroops = 0;
+  window.myTroops += amount;
+
+  updateTroopDisplay();
+
+  showNotif(`+${amount} soldats recrutés`, 'success');
+}
   // ── Drag & hover ──
   canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -976,9 +1018,12 @@ function initGame(data) {
       const tile = gameMap.tiles[hoveredTile];
       if (tile && tile.active) {
         if (tile.owner === myId) {
-          // Ma tuile → ouvrir la roue
-          closeWheel(); closeBuildMenu();
-          openWheel(e.clientX, e.clientY, hoveredTile);
+  // ✅ Si bâtiment = recrutement → ouvrir menu recrutement
+  if (tile.building === 'recruit_post') {
+    openRecruitMenu(tile);
+  } else {
+    closeWheel(); closeBuildMenu();
+    openWheel(e.clientX, e.clientY, hoveredTile);
         } else if (tile.owner !== myId) {
           // Capture si adjacent
           socket.emit('tile:capture', { col: tile.col, row: tile.row }, (res) => {
