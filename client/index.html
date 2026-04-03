@@ -559,57 +559,83 @@ function drawMap() {
     const { x, y } = hexToPixel(tile.col, tile.row);
     const key = `${tile.col},${tile.row}`;
     const isAdj = myId && isAdjacentToPlayer_client(tile.col, tile.row);
+    const inBrush = brushHoveredKeys.has(key);
+
     let fill = '#1a2030', stroke = '#2a3040';
     if (tile.owner) { fill = tile.color + 'cc'; stroke = tile.color; }
     if (tile.owner === myId) fill = tile.color + 'ee';
-    if (hoveredTile === key && !tile.owner) { fill = isAdj ? '#ffffff22' : '#ffffff0a'; stroke = isAdj ? '#ffffff66' : '#ffffff22'; }
-    if (hoveredTile === key && tile.owner && tile.owner !== myId) { fill = tile.color + 'aa'; stroke = '#ffffff88'; }
+    if (hoveredTile === key && !rightMouseDown && !tile.owner) { fill = isAdj ? '#ffffff22' : '#ffffff0a'; stroke = isAdj ? '#ffffff66' : '#ffffff22'; }
+    if (hoveredTile === key && !rightMouseDown && tile.owner && tile.owner !== myId) { fill = tile.color + 'aa'; stroke = '#ffffff88'; }
     if (selectedTile === key) { stroke = '#ffffff'; fill = tile.owner === myId ? tile.color + 'ff' : '#ffffff22'; }
+    if (inBrush && tile.owner === myId) { stroke = '#ffffff'; fill = tile.color + 'ff'; }
+
     drawHex(x, y, HEX_SIZE - 2, fill, stroke);
     if (isAdj && !tile.owner && hoveredTile !== key) drawHex(x, y, HEX_SIZE * 0.3, myColor + '55', myColor + '88');
     if (isAdj && tile.owner && tile.owner !== myId && hoveredTile !== key) drawHex(x, y, HEX_SIZE * 0.25, '#ff000033', '#ff000066');
 
-    // Icône bâtiment (décalée vers le haut si recrutement en cours)
+    // Icône bâtiment
     if (tile.building && BUILDINGS[tile.building]) {
       const rState = recruitStates.get(key);
-      const emojiY = rState ? y - 6 : y;
-      ctx.font = `${HEX_SIZE * 0.55}px serif`;
+      const hasTroops = (tile.troops || 0) > 0;
+      const emojiY = (rState || hasTroops) ? y - 8 : y;
+      ctx.font = `${HEX_SIZE * 0.5}px serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.globalAlpha = 1;
       ctx.fillText(BUILDINGS[tile.building].emoji, x, emojiY);
 
-      // Barre de progression recrutement
       if (rState) {
         const barW = (HEX_SIZE - 2) * Math.sqrt(3) * 0.75;
-        const barH = 5;
+        const barH = 4;
         const bx = x - barW / 2;
-        const by = y + HEX_SIZE * 0.45;
-
-        // Fond
+        const by = y + HEX_SIZE * 0.38;
         ctx.save();
-        ctx.globalAlpha = 0.8;
-        ctx.fillStyle = '#0a0c0e';
+        ctx.globalAlpha = 0.8; ctx.fillStyle = '#0a0c0e';
         ctx.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
-
-        // Remplissage animé
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#e8a87c';
+        ctx.globalAlpha = 1; ctx.fillStyle = '#e8a87c';
         ctx.fillRect(bx, by, barW * rState.progress, barH);
-
-        // Bordure
-        ctx.strokeStyle = '#e8a87c44';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#e8a87c44'; ctx.lineWidth = 1;
         ctx.strokeRect(bx, by, barW, barH);
-
-        // Compteur de troupes restantes
-        ctx.fillStyle = '#e8a87c';
-        ctx.font = `bold 8px 'Share Tech Mono', monospace`;
+        ctx.fillStyle = '#e8a87c'; ctx.font = `bold 8px 'Share Tech Mono', monospace`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-        ctx.fillText(`×${rState.remaining} 🪖`, x, by + barH + 2);
+        ctx.fillText(`x${rState.remaining}`, x, by + barH + 1);
         ctx.restore();
       }
     }
+
+    // Badge troupes
+    if ((tile.troops || 0) > 0) {
+      const hasBuild = !!(tile.building && BUILDINGS[tile.building]);
+      const ty = hasBuild ? y + HEX_SIZE * 0.35 : y;
+      ctx.save();
+      ctx.globalAlpha = 0.9; ctx.fillStyle = '#0a0c0e';
+      ctx.beginPath(); ctx.arc(x, ty, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = tile.owner === myId ? myColor : (tile.color || '#fff');
+      ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = `bold 9px 'Share Tech Mono', monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(tile.troops > 99 ? '99+' : String(tile.troops), x, ty);
+      ctx.restore();
+    }
   }
   ctx.restore();
+
+  // Cercle pinceau (en coordonnées écran, hors translate)
+  if (rightMouseDown && brushCursorX !== null) {
+    ctx.save();
+    const radius = brushRadius * HEX_SIZE * Math.sqrt(3) * 0.9;
+    ctx.beginPath();
+    ctx.arc(brushCursorX, brushCursorY, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = `bold 11px 'Share Tech Mono', monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(`R${brushRadius}  x${deployAmount} troupe`, brushCursorX, brushCursorY - radius - 4);
+    ctx.restore();
+  }
 }
 
 function isAdjacentToPlayer_client(col, row) {
@@ -618,14 +644,50 @@ function isAdjacentToPlayer_client(col, row) {
   return dirs.some(([dc, dr]) => { const t = gameMap.tiles[`${col+dc},${row+dr}`]; return t && t.owner === myId; });
 }
 
+// ─── PINCEAU CLIC DROIT ──────────────────────────────────────────────────────
+let brushRadius = 1;
+let deployAmount = 1;
+let rightMouseDown = false;
+let brushCursorX = null, brushCursorY = null;
+let brushHoveredKeys = new Set();
+const brushPaintedThisPress = new Set();
+
+function getHexesInRadius(centerCol, centerRow, radius) {
+  if (!gameMap) return [];
+  const result = [];
+  for (const tile of Object.values(gameMap.tiles)) {
+    if (!tile.active) continue;
+    const dc = tile.col - centerCol, dr = tile.row - centerRow;
+    if (Math.sqrt(dc * dc + dr * dr) <= radius) result.push(`${tile.col},${tile.row}`);
+  }
+  return result;
+}
+
+function deployTroopsOnBrush(centerKey) {
+  if (!gameMap || myTroops <= 0) return;
+  const tile = gameMap.tiles[centerKey];
+  if (!tile) return;
+  const keys = getHexesInRadius(tile.col, tile.row, brushRadius);
+  for (const key of keys) {
+    if (brushPaintedThisPress.has(key)) continue;
+    const t = gameMap.tiles[key];
+    if (!t || !t.active || t.owner !== myId) continue;
+    if (myTroops <= 0) break;
+    const amount = Math.min(deployAmount, myTroops);
+    t.troops = (t.troops || 0) + amount;
+    myTroops -= amount;
+    brushPaintedThisPress.add(key);
+    updateResDisplay();
+  }
+}
+
 // ─── WHEEL & MENUS ────────────────────────────────────────────────────────────
 let wheelTargetKey = null;
 
 function closeAll() {
   ['build-menu', 'recruit-popup'].forEach(id => {
     const el = document.getElementById(id);
-    el.classList.remove('active');
-    el.style.display = 'none';
+    el.classList.remove('active'); el.style.display = 'none';
   });
   document.getElementById('wheel-overlay').classList.remove('active');
   document.getElementById('wheel-container').innerHTML = '';
@@ -655,14 +717,10 @@ function openWheel(screenX, screenY, tileKey) {
   const container = document.getElementById('wheel-container');
   container.style.left = screenX + 'px'; container.style.top = screenY + 'px';
   container.innerHTML = '';
-  container.classList.remove('anim');
-  void container.offsetWidth;
-  container.classList.add('anim');
-
+  container.classList.remove('anim'); void container.offsetWidth; container.classList.add('anim');
   const center = document.createElement('div');
   center.className = 'wheel-center'; center.textContent = '🏠';
   container.appendChild(center);
-
   const rad = -90 * Math.PI / 180;
   const seg = document.createElement('div');
   seg.className = 'wheel-segment';
@@ -680,57 +738,26 @@ function openBuildMenu(screenX, screenY) {
   const menu = document.getElementById('build-menu');
   const itemsEl = document.getElementById('build-items');
   itemsEl.innerHTML = '';
-
   const dynCost = getRecruitPostCost();
   const canAffordGold = myResources.gold >= dynCost.gold;
   const canAffordMat = myResources.mat >= dynCost.mat;
   const canAfford = canAffordGold && canAffordMat;
   const tile = gameMap?.tiles[wheelTargetKey];
   const alreadyBuilt = tile?.building === 'recruit_post';
-
   const item = document.createElement('div');
   item.className = 'build-item' + (!canAfford || alreadyBuilt ? ' disabled' : '');
-
   let costHtml = `<span class="build-cost-tag gold ${!canAffordGold ? 'insufficient' : ''}">💰 ${dynCost.gold}</span>`;
   costHtml += `<span class="build-cost-tag mat ${!canAffordMat ? 'insufficient' : ''}">🪨 ${dynCost.mat}</span>`;
-  if (dynCost.count > 0) costHtml += `<span class="build-cost-tag info">+50% / poste (×${dynCost.count})</span>`;
+  if (dynCost.count > 0) costHtml += `<span class="build-cost-tag info">+50%/poste (x${dynCost.count})</span>`;
   if (alreadyBuilt) costHtml += '<span class="build-cost-tag" style="color:var(--success);border-color:var(--success)">DÉJÀ CONSTRUIT</span>';
-
   item.innerHTML = `<div class="build-item-name">📑 Poste de recrutement</div><div class="build-item-cost">${costHtml}</div>`;
-  if (canAfford && !alreadyBuilt) {
-    item.onclick = (e) => { e.stopPropagation(); doBuild('recruit_post', dynCost); };
-  }
+  if (canAfford && !alreadyBuilt) item.onclick = (e) => { e.stopPropagation(); doBuild('recruit_post', dynCost); };
   itemsEl.appendChild(item);
   positionPopup(menu, screenX, screenY);
   activateOverlay();
 }
 
-// Bouton fermer build-menu — stopPropagation empêche le bg-click
-document.getElementById('build-menu-close').addEventListener('click', (e) => {
-  e.stopPropagation(); closeAll();
-});
-
-function doBuild(buildingId, cost) {
-  if (!wheelTargetKey) return;
-  const tile = gameMap.tiles[wheelTargetKey];
-  if (!tile) return;
-  // Débiter immédiatement côté client avec le vrai coût dynamique
-  myResources.gold -= cost.gold;
-  myResources.mat -= cost.mat;
-  updateResDisplay();
-  socket.emit('tile:build', { col: tile.col, row: tile.row, buildingId, cost }, (res) => {
-    if (res?.success) {
-      tile.building = buildingId; drawMap(); showNotif('📑 Poste construit !', 'success');
-    } else {
-      // Rembourser si refus serveur
-      myResources.gold += cost.gold;
-      myResources.mat += cost.mat;
-      updateResDisplay();
-      showNotif(res?.error || 'Construction impossible', 'error');
-    }
-  });
-  closeAll();
-}
+document.getElementById('build-menu-close').addEventListener('click', (e) => { e.stopPropagation(); closeAll(); });
 
 // ─── POPUP RECRUTEMENT ────────────────────────────────────────────────────────
 let recruitAmount = 1;
@@ -744,29 +771,19 @@ function getMyPosts() {
 }
 
 function openRecruitPopup(tileKey, screenX, screenY) {
-  recruitTileKey = tileKey;
-  recruitAmount = 1;
+  recruitTileKey = tileKey; recruitAmount = 1;
   const maxTroops = Math.floor(myResources.gold / TROOP_COST);
   const posts = getMyPosts();
   const inProgress = recruitStates.get(tileKey);
-
-  // Info
-  let infoHtml = `💰 <span>${TROOP_COST}</span> par soldat &nbsp;|&nbsp; Max : <span>${Math.max(1, maxTroops)}</span>`;
-  if (inProgress) infoHtml += `<br>⏳ En file sur ce post : <span>${inProgress.remaining}</span>`;
+  let infoHtml = `💰 <span>${TROOP_COST}</span> par soldat &nbsp;|&nbsp; Max : <span>${Math.max(1,maxTroops)}</span>`;
+  if (inProgress) infoHtml += `<br>⏳ En file : <span>${inProgress.remaining}</span>`;
   if (posts.length > 1) infoHtml += `<br>📑 <span>${posts.length}</span> posts disponibles`;
   document.getElementById('recruit-info').innerHTML = infoHtml;
-
-  // Slider
   const slider = document.getElementById('recruit-slider');
-  slider.min = 1;
-  slider.max = Math.max(1, maxTroops);
-  slider.value = 1;
-
-  // Case à cocher répartition — visible seulement si plusieurs posts
+  slider.min = 1; slider.max = Math.max(1, maxTroops); slider.value = 1;
   const spreadRow = document.getElementById('recruit-spread-row');
   spreadRow.style.display = posts.length > 1 ? 'flex' : 'none';
   document.getElementById('recruit-spread').checked = false;
-
   updateRecruitDisplay(maxTroops);
   const popup = document.getElementById('recruit-popup');
   positionPopup(popup, screenX, screenY);
@@ -776,49 +793,48 @@ function openRecruitPopup(tileKey, screenX, screenY) {
 function updateRecruitDisplay(maxOverride) {
   const max = maxOverride ?? Math.floor(myResources.gold / TROOP_COST);
   const slider = document.getElementById('recruit-slider');
-  recruitAmount = parseInt(slider.value) || 1;
-  recruitAmount = Math.max(1, Math.min(recruitAmount, Math.max(1, max)));
+  recruitAmount = Math.max(1, Math.min(parseInt(slider.value) || 1, Math.max(1, max)));
   slider.value = recruitAmount;
   document.getElementById('recruit-count').textContent = recruitAmount;
   document.getElementById('recruit-total-cost').textContent = recruitAmount * TROOP_COST;
   document.getElementById('recruit-confirm').disabled = max < 1 || myResources.gold < TROOP_COST;
 }
 
-document.getElementById('recruit-slider').addEventListener('input', (e) => {
-  e.stopPropagation(); updateRecruitDisplay();
-});
+document.getElementById('recruit-slider').addEventListener('input', (e) => { e.stopPropagation(); updateRecruitDisplay(); });
 document.getElementById('recruit-slider').addEventListener('click', (e) => e.stopPropagation());
 
 document.getElementById('recruit-confirm').addEventListener('click', (e) => {
   e.stopPropagation();
   if (!recruitTileKey) return;
   const cost = recruitAmount * TROOP_COST;
-  if (myResources.gold < cost) { showNotif('Pas assez d\'argent', 'error'); return; }
-
+  if (myResources.gold < cost) { showNotif('Pas assez argent', 'error'); return; }
   const spreadAll = document.getElementById('recruit-spread').checked;
   const posts = getMyPosts();
-
-  myResources.gold -= cost;
-  updateResDisplay();
-
+  myResources.gold -= cost; updateResDisplay();
   if (spreadAll && posts.length > 1) {
-    // Répartir équitablement sur tous les posts
     const perPost = Math.floor(recruitAmount / posts.length);
-    let remainder = recruitAmount - perPost * posts.length;
-    posts.forEach((key, i) => {
-      const amount = perPost + (i === 0 ? remainder : 0);
-      if (amount > 0) startRecruitment(key, amount);
-    });
-    showNotif(`⏳ ${recruitAmount} soldats répartis sur ${posts.length} posts`, 'success');
+    let rem = recruitAmount - perPost * posts.length;
+    posts.forEach((key, i) => { const amt = perPost + (i === 0 ? rem : 0); if (amt > 0) startRecruitment(key, amt); });
+    showNotif(`⏳ ${recruitAmount} soldats sur ${posts.length} posts`, 'success');
   } else {
     startRecruitment(recruitTileKey, recruitAmount);
     showNotif(`⏳ ${recruitAmount} soldat(s) en recrutement...`, 'success');
   }
   closeAll();
 });
-document.getElementById('recruit-close').addEventListener('click', (e) => {
-  e.stopPropagation(); closeAll();
-});
+document.getElementById('recruit-close').addEventListener('click', (e) => { e.stopPropagation(); closeAll(); });
+
+function doBuild(buildingId, cost) {
+  if (!wheelTargetKey) return;
+  const tile = gameMap.tiles[wheelTargetKey];
+  if (!tile) return;
+  myResources.gold -= cost.gold; myResources.mat -= cost.mat; updateResDisplay();
+  socket.emit('tile:build', { col: tile.col, row: tile.row, buildingId, cost }, (res) => {
+    if (res?.success) { tile.building = buildingId; drawMap(); showNotif('📑 Poste construit !', 'success'); }
+    else { myResources.gold += cost.gold; myResources.mat += cost.mat; updateResDisplay(); showNotif(res?.error || 'Erreur', 'error'); }
+  });
+  closeAll();
+}
 
 // ─── INIT GAME ───────────────────────────────────────────────────────────────
 function initGame(data) {
@@ -842,6 +858,19 @@ function initGame(data) {
   canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
     const px = e.clientX - rect.left - offsetX, py = e.clientY - rect.top - offsetY;
+
+    if (rightMouseDown) {
+      brushCursorX = e.clientX - rect.left;
+      brushCursorY = e.clientY - rect.top;
+      const centerKey = pixelToHex(px, py);
+      if (centerKey) {
+        const t = gameMap.tiles[centerKey];
+        brushHoveredKeys = new Set(getHexesInRadius(t.col, t.row, brushRadius));
+        deployTroopsOnBrush(centerKey);
+      } else { brushHoveredKeys = new Set(); }
+      drawMap(); return;
+    }
+
     if (dragStart) {
       const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
       if (Math.sqrt(dx*dx + dy*dy) > 5) isDragging = true;
@@ -859,9 +888,10 @@ function initGame(data) {
       const owner = tile.owner ? (gamePlayers[tile.owner]?.name || '?') : 'Neutre';
       const adj = isAdjacentToPlayer_client(tile.col, tile.row);
       const bInfo = tile.building ? ` | ${BUILDINGS[tile.building]?.emoji} ${BUILDINGS[tile.building]?.name}` : '';
-      let hint = owner + bInfo;
-      if (tile.owner === myId) hint += tile.building === 'recruit_post' ? ' — CLIC pour recruter' : ' — CLIC pour construire';
-      else if (adj) hint += ' — CLIC pour capturer (5💰)';
+      const tInfo = (tile.troops || 0) > 0 ? ` · x${tile.troops}🪖` : '';
+      let hint = owner + bInfo + tInfo;
+      if (tile.owner === myId) hint += tile.building === 'recruit_post' ? ' — CLIC recruter' : ' — CLIC construire';
+      else if (adj) hint += ' — CLIC capturer (5💰)';
       tooltip.style.display = 'block';
       tooltip.style.left = (e.clientX + 12) + 'px'; tooltip.style.top = (e.clientY - 10) + 'px';
       tooltip.textContent = hint; tooltip.style.borderColor = tile.color || 'var(--border)';
@@ -869,21 +899,38 @@ function initGame(data) {
   });
 
   canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 2) {
+      e.preventDefault();
+      rightMouseDown = true;
+      brushPaintedThisPress.clear();
+      const rect = canvas.getBoundingClientRect();
+      brushCursorX = e.clientX - rect.left;
+      brushCursorY = e.clientY - rect.top;
+      const px = e.clientX - rect.left - offsetX, py = e.clientY - rect.top - offsetY;
+      const centerKey = pixelToHex(px, py);
+      if (centerKey) {
+        const t = gameMap.tiles[centerKey];
+        brushHoveredKeys = new Set(getHexesInRadius(t.col, t.row, brushRadius));
+        deployTroopsOnBrush(centerKey);
+      }
+      closeAll(); drawMap(); return;
+    }
     isDragging = false;
     dragStart = { x: e.clientX, y: e.clientY };
     dragOffset = { x: offsetX, y: offsetY };
   });
 
   canvas.addEventListener('mouseup', (e) => {
+    if (e.button === 2) {
+      rightMouseDown = false; brushHoveredKeys = new Set(); brushPaintedThisPress.clear();
+      drawMap(); return;
+    }
     if (!isDragging && hoveredTile) {
       const tile = gameMap.tiles[hoveredTile];
       if (tile && tile.active) {
         if (tile.owner === myId) {
-          if (tile.building === 'recruit_post') {
-            closeAll(); openRecruitPopup(hoveredTile, e.clientX, e.clientY);
-          } else {
-            closeAll(); openWheel(e.clientX, e.clientY, hoveredTile);
-          }
+          if (tile.building === 'recruit_post') { closeAll(); openRecruitPopup(hoveredTile, e.clientX, e.clientY); }
+          else { closeAll(); openWheel(e.clientX, e.clientY, hoveredTile); }
         } else {
           socket.emit('tile:capture', { col: tile.col, row: tile.row }, (res) => {
             if (!res?.success && res?.error) showNotif(res.error, 'error');
@@ -896,9 +943,21 @@ function initGame(data) {
 
   canvas.addEventListener('mouseleave', () => {
     hoveredTile = null; document.getElementById('tile-tooltip').style.display = 'none';
-    isDragging = false; dragStart = null; drawMap();
+    isDragging = false; dragStart = null;
+    rightMouseDown = false; brushHoveredKeys = new Set();
+    brushCursorX = null; brushCursorY = null;
+    drawMap();
   });
-  canvas.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (rightMouseDown) {
+      brushRadius = Math.max(1, Math.min(5, brushRadius - Math.sign(e.deltaY)));
+      drawMap();
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 </script>
 </body>
