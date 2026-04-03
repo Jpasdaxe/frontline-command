@@ -321,7 +321,7 @@ io.on('connection', (socket) => {
   });
 
   // ── Construction de bâtiment ──
-  socket.on('tile:build', ({ col, row, buildingId }, cb) => {
+  socket.on('tile:build', ({ col, row, buildingId, cost }, cb) => {
     const code = playerRoom.get(socket.id);
     const room = rooms.get(code);
     if (!room || room.status !== 'playing') return cb?.({ success: false, error: 'Partie non active' });
@@ -337,17 +337,25 @@ io.on('connection', (socket) => {
     const def = BUILDINGS_DEF[buildingId];
     if (!def) return cb?.({ success: false, error: 'Bâtiment inconnu' });
 
-    // Vérifier les ressources
-    for (const [resType, cost] of Object.entries(def.cost)) {
-      if ((player.resources[resType] ?? 0) < cost) {
-        return cb?.({ success: false, error: `Pas assez de ${resType} (${cost} requis)` });
-      }
-    }
+    // Calculer le vrai coût dynamique côté serveur (même formule que le client)
+    const postCount = Object.values(room.map.tiles).filter(
+      t => t.owner === socket.id && t.building === 'recruit_post'
+    ).length;
+    const mult = Math.pow(1.5, postCount);
+    const realCost = {
+      gold: Math.round(def.cost.gold * mult),
+      mat: Math.round(def.cost.mat * mult),
+    };
 
-    // Débiter les ressources
-    for (const [resType, cost] of Object.entries(def.cost)) {
-      player.resources[resType] -= cost;
-    }
+    // Vérifier les ressources avec le vrai coût
+    if ((player.resources.gold ?? 0) < realCost.gold)
+      return cb?.({ success: false, error: `Pas assez d'argent (${realCost.gold}💰 requis)` });
+    if ((player.resources.mat ?? 0) < realCost.mat)
+      return cb?.({ success: false, error: `Pas assez de matériaux (${realCost.mat}🪨 requis)` });
+
+    // Débiter
+    player.resources.gold -= realCost.gold;
+    player.resources.mat -= realCost.mat;
 
     tile.building = buildingId;
     io.to(code).emit('map:update', { [key]: tile });

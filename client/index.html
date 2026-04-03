@@ -143,12 +143,26 @@
     .recruit-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
     .recruit-info { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 1px; line-height: 1.7; }
     .recruit-info span { color: var(--accent); }
-    .recruit-controls { display: flex; align-items: center; gap: 10px; }
-    .recruit-btn { width: 32px; height: 32px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .12s; font-family: var(--mono); }
-    .recruit-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .recruit-count { font-family: var(--mono); font-size: 22px; color: var(--accent); min-width: 40px; text-align: center; }
+    .recruit-slider-row { display: flex; align-items: center; gap: 12px; }
+    .recruit-slider {
+      flex: 1; -webkit-appearance: none; appearance: none;
+      height: 4px; background: var(--border); outline: none; cursor: pointer;
+    }
+    .recruit-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 16px; height: 16px;
+      border-radius: 50%; background: var(--accent); cursor: pointer;
+      border: 2px solid var(--bg);
+    }
+    .recruit-slider::-moz-range-thumb {
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--accent); cursor: pointer; border: 2px solid var(--bg);
+    }
+    .recruit-count { font-family: var(--mono); font-size: 22px; color: var(--accent); min-width: 40px; text-align: right; }
     .recruit-cost-line { font-family: var(--mono); font-size: 11px; color: var(--muted); }
     .recruit-cost-line span { color: var(--accent); }
+    .recruit-spread-row { display: flex; align-items: center; padding: 6px 0; border-top: 1px solid var(--border); }
+    .recruit-spread-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-family: var(--mono); font-size: 11px; color: var(--text); letter-spacing: 1px; user-select: none; }
+    .recruit-spread-label input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
     .recruit-confirm { font-family: var(--sans); font-size: 15px; font-weight: 600; letter-spacing: 2px; padding: 10px 16px; border: 1px solid #e8a87c; color: #e8a87c; background: transparent; cursor: pointer; transition: all .15s; width: 100%; }
     .recruit-confirm:hover:not(:disabled) { background: #e8a87c22; }
     .recruit-confirm:disabled { opacity: .4; cursor: not-allowed; }
@@ -272,11 +286,16 @@
     <div class="recruit-popup-title">🪖 RECRUTEMENT</div>
     <div class="recruit-body">
       <div class="recruit-info" id="recruit-info"></div>
-      <div class="recruit-controls">
-        <button class="recruit-btn" id="recruit-minus">−</button>
+      <div class="recruit-slider-row">
+        <input type="range" class="recruit-slider" id="recruit-slider" min="1" max="100" value="1">
         <div class="recruit-count" id="recruit-count">1</div>
-        <button class="recruit-btn" id="recruit-plus">+</button>
-        <div class="recruit-cost-line">Coût : <span id="recruit-total-cost">20</span> 💰</div>
+      </div>
+      <div class="recruit-cost-line">Coût total : <span id="recruit-total-cost">20</span> 💰</div>
+      <div class="recruit-spread-row" id="recruit-spread-row">
+        <label class="recruit-spread-label">
+          <input type="checkbox" id="recruit-spread">
+          <span>Répartir sur tous mes posts</span>
+        </label>
       </div>
       <button class="recruit-confirm" id="recruit-confirm">▶ RECRUTER</button>
     </div>
@@ -695,9 +714,20 @@ function doBuild(buildingId, cost) {
   if (!wheelTargetKey) return;
   const tile = gameMap.tiles[wheelTargetKey];
   if (!tile) return;
+  // Débiter immédiatement côté client avec le vrai coût dynamique
+  myResources.gold -= cost.gold;
+  myResources.mat -= cost.mat;
+  updateResDisplay();
   socket.emit('tile:build', { col: tile.col, row: tile.row, buildingId, cost }, (res) => {
-    if (res?.success) { tile.building = buildingId; drawMap(); showNotif('📑 Poste construit !', 'success'); }
-    else showNotif(res?.error || 'Construction impossible', 'error');
+    if (res?.success) {
+      tile.building = buildingId; drawMap(); showNotif('📑 Poste construit !', 'success');
+    } else {
+      // Rembourser si refus serveur
+      myResources.gold += cost.gold;
+      myResources.mat += cost.mat;
+      updateResDisplay();
+      showNotif(res?.error || 'Construction impossible', 'error');
+    }
   });
   closeAll();
 }
@@ -706,15 +736,36 @@ function doBuild(buildingId, cost) {
 let recruitAmount = 1;
 let recruitTileKey = null;
 
+function getMyPosts() {
+  if (!gameMap) return [];
+  return Object.entries(gameMap.tiles)
+    .filter(([, t]) => t.owner === myId && t.building === 'recruit_post')
+    .map(([key]) => key);
+}
+
 function openRecruitPopup(tileKey, screenX, screenY) {
   recruitTileKey = tileKey;
   recruitAmount = 1;
   const maxTroops = Math.floor(myResources.gold / TROOP_COST);
+  const posts = getMyPosts();
   const inProgress = recruitStates.get(tileKey);
 
-  document.getElementById('recruit-info').innerHTML =
-    `💰 <span>${TROOP_COST}</span> par soldat &nbsp;|&nbsp; Max : <span>${maxTroops}</span>` +
-    (inProgress ? `<br>⏳ En file : <span>${inProgress.remaining}</span> soldat(s)` : '');
+  // Info
+  let infoHtml = `💰 <span>${TROOP_COST}</span> par soldat &nbsp;|&nbsp; Max : <span>${Math.max(1, maxTroops)}</span>`;
+  if (inProgress) infoHtml += `<br>⏳ En file sur ce post : <span>${inProgress.remaining}</span>`;
+  if (posts.length > 1) infoHtml += `<br>📑 <span>${posts.length}</span> posts disponibles`;
+  document.getElementById('recruit-info').innerHTML = infoHtml;
+
+  // Slider
+  const slider = document.getElementById('recruit-slider');
+  slider.min = 1;
+  slider.max = Math.max(1, maxTroops);
+  slider.value = 1;
+
+  // Case à cocher répartition — visible seulement si plusieurs posts
+  const spreadRow = document.getElementById('recruit-spread-row');
+  spreadRow.style.display = posts.length > 1 ? 'flex' : 'none';
+  document.getElementById('recruit-spread').checked = false;
 
   updateRecruitDisplay(maxTroops);
   const popup = document.getElementById('recruit-popup');
@@ -724,30 +775,45 @@ function openRecruitPopup(tileKey, screenX, screenY) {
 
 function updateRecruitDisplay(maxOverride) {
   const max = maxOverride ?? Math.floor(myResources.gold / TROOP_COST);
+  const slider = document.getElementById('recruit-slider');
+  recruitAmount = parseInt(slider.value) || 1;
   recruitAmount = Math.max(1, Math.min(recruitAmount, Math.max(1, max)));
+  slider.value = recruitAmount;
   document.getElementById('recruit-count').textContent = recruitAmount;
   document.getElementById('recruit-total-cost').textContent = recruitAmount * TROOP_COST;
-  const canAfford = myResources.gold >= recruitAmount * TROOP_COST;
-  document.getElementById('recruit-confirm').disabled = !canAfford || max < 1;
+  document.getElementById('recruit-confirm').disabled = max < 1 || myResources.gold < TROOP_COST;
 }
 
-document.getElementById('recruit-minus').addEventListener('click', (e) => {
-  e.stopPropagation(); recruitAmount = Math.max(1, recruitAmount - 1); updateRecruitDisplay();
+document.getElementById('recruit-slider').addEventListener('input', (e) => {
+  e.stopPropagation(); updateRecruitDisplay();
 });
-document.getElementById('recruit-plus').addEventListener('click', (e) => {
-  e.stopPropagation();
-  recruitAmount = Math.min(Math.floor(myResources.gold / TROOP_COST), recruitAmount + 1);
-  updateRecruitDisplay();
-});
+document.getElementById('recruit-slider').addEventListener('click', (e) => e.stopPropagation());
+
 document.getElementById('recruit-confirm').addEventListener('click', (e) => {
   e.stopPropagation();
   if (!recruitTileKey) return;
   const cost = recruitAmount * TROOP_COST;
   if (myResources.gold < cost) { showNotif('Pas assez d\'argent', 'error'); return; }
-  myResources.gold -= cost; // débit immédiat côté client
+
+  const spreadAll = document.getElementById('recruit-spread').checked;
+  const posts = getMyPosts();
+
+  myResources.gold -= cost;
   updateResDisplay();
-  startRecruitment(recruitTileKey, recruitAmount);
-  showNotif(`⏳ ${recruitAmount} soldat(s) en recrutement...`, 'success');
+
+  if (spreadAll && posts.length > 1) {
+    // Répartir équitablement sur tous les posts
+    const perPost = Math.floor(recruitAmount / posts.length);
+    let remainder = recruitAmount - perPost * posts.length;
+    posts.forEach((key, i) => {
+      const amount = perPost + (i === 0 ? remainder : 0);
+      if (amount > 0) startRecruitment(key, amount);
+    });
+    showNotif(`⏳ ${recruitAmount} soldats répartis sur ${posts.length} posts`, 'success');
+  } else {
+    startRecruitment(recruitTileKey, recruitAmount);
+    showNotif(`⏳ ${recruitAmount} soldat(s) en recrutement...`, 'success');
+  }
   closeAll();
 });
 document.getElementById('recruit-close').addEventListener('click', (e) => {
