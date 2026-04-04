@@ -282,6 +282,21 @@
     <div class="build-menu-close" id="build-menu-close">✕ FERMER</div>
   </div>
 
+  <div class="recruit-popup" id="camp-popup">
+    <div class="recruit-popup-title" style="color:#8ab4e8;border-left-color:#8ab4e8">⛺ PRODUCTION — CAMP MILITAIRE</div>
+    <div class="recruit-body">
+      <div class="recruit-info" id="camp-info"></div>
+      <div class="recruit-slider-row">
+        <input type="range" class="recruit-slider" id="camp-slider" min="1" max="20" value="1">
+        <div class="recruit-count" id="camp-count" style="color:#8ab4e8">1</div>
+      </div>
+      <div class="recruit-cost-line">Coût total : <span id="camp-total-cost" style="color:#8ab4e8">100</span> 💰 + <span id="camp-total-mec" style="color:#8ab4e8">25</span> ⚙️</div>
+      <div class="recruit-cost-line" style="margin-top:4px">Durée : <span id="camp-total-time" style="color:#8ab4e8">30s</span></div>
+      <button class="recruit-confirm" id="camp-confirm" style="border-color:#8ab4e8;color:#8ab4e8">▶ PRODUIRE</button>
+    </div>
+    <div class="recruit-close" id="camp-close">✕ FERMER</div>
+  </div>
+
   <div class="recruit-popup" id="recruit-popup">
     <div class="recruit-popup-title">🪖 RECRUTEMENT</div>
     <div class="recruit-body">
@@ -317,6 +332,7 @@ let myId = null, myColor = null, currentRoom = null;
 let gameMap = null, gamePlayers = {};
 let myResources = { gold: 0, mat: 0, mec: 0, fuel: 0 };
 let myTroops = 0;
+let productionQueues = {}; // tileKey → { count, nextEndsAt, playerId }
 
 socket.on('connect', () => { myId = socket.id; setConn(true); });
 socket.on('disconnect', () => setConn(false));
@@ -325,14 +341,22 @@ socket.on('game:start', (data) => initGame(data));
 socket.on('game:myId', (data) => { myId = data.myId; myColor = data.color; });
 socket.on('map:update', (tiles) => { if (gameMap) { Object.assign(gameMap.tiles, tiles); drawMap(); } });
 socket.on('game:resources', (res) => {
-  for (const [id, amount] of Object.entries(res)) {
-    if (gamePlayers[id]) gamePlayers[id].resources = amount;
+  // Nouveau format: { socketId: { resources: {...}, troops: N } }
+  for (const [id, data] of Object.entries(res)) {
+    const resources = data.resources ?? data; // compat ancien format
+    const troops = data.troops ?? null;
+    if (gamePlayers[id]) gamePlayers[id].resources = resources;
     if (id === myId) {
-      myResources = typeof amount === 'object' ? amount : { gold: amount, mat: myResources.mat, mec: myResources.mec, fuel: myResources.fuel };
+      myResources = resources;
+      if (troops !== null) myTroops = troops;
       updateResDisplay();
     }
   }
   updateHudPlayers();
+});
+socket.on('production:update', (queues) => {
+  productionQueues = queues;
+  drawMap();
 });
 socket.on('game:tick', (data) => { document.getElementById('hud-tick').textContent = data.tick; });
 socket.on('game:over', (data) => {
@@ -377,6 +401,7 @@ function leaveRoom() {
   socket.emit('room:leave');
   currentRoom = null; gameMap = null; gamePlayers = {};
   myResources = { gold: 0, mat: 0, mec: 0, fuel: 0 }; myTroops = 0;
+  productionQueues = {};
   stopAllRecruitment();
   document.getElementById('game-screen').classList.remove('active');
   document.getElementById('lobby-wrap').style.display = 'flex';
@@ -467,8 +492,17 @@ function getRecruitPostCost() {
 }
 
 const BUILDINGS = {
-  recruit_post: { id: 'recruit_post', name: 'Poste de recrutement', icon: '📑', emoji: '📑' }
+  recruit_post: { id: 'recruit_post', name: 'Poste de recrutement', icon: '📑', emoji: '📑' },
+  military_camp: { id: 'military_camp', name: 'Camp militaire', icon: '⛺', emoji: '⛺' },
 };
+
+const UNITS = {
+  soldier: { id: 'soldier', name: 'Soldat', emoji: '🪖', cost: { gold: 100, mec: 25 }, productionTime: 30000, hp: 3 },
+};
+
+function getMilitaryCampCost() {
+  return { gold: 1000, mat: 800 };
+}
 
 // ── Recrutement avec cooldown 1s/troupe ──────────────────────────────────────
 const recruitStates = new Map(); // tileKey → { remaining, progress, startTime, animFrame, timer }
@@ -576,27 +610,48 @@ function drawMap() {
     // Icône bâtiment
     if (tile.building && BUILDINGS[tile.building]) {
       const rState = recruitStates.get(key);
+      const pQueue = productionQueues[key];
       const hasTroops = (tile.troops || 0) > 0;
-      const emojiY = (rState || hasTroops) ? y - 8 : y;
+      const hasBar = rState || (pQueue && tile.owner === myId);
+      const emojiY = (hasBar || hasTroops) ? y - 8 : y;
       ctx.font = `${HEX_SIZE * 0.5}px serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.globalAlpha = 1;
       ctx.fillText(BUILDINGS[tile.building].emoji, x, emojiY);
 
+      // Barre recrutement (poste)
       if (rState) {
         const barW = (HEX_SIZE - 2) * Math.sqrt(3) * 0.75;
         const barH = 4;
-        const bx = x - barW / 2;
-        const by = y + HEX_SIZE * 0.38;
+        const bx = x - barW / 2, by = y + HEX_SIZE * 0.38;
         ctx.save();
         ctx.globalAlpha = 0.8; ctx.fillStyle = '#0a0c0e';
-        ctx.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
+        ctx.fillRect(bx-1, by-1, barW+2, barH+2);
         ctx.globalAlpha = 1; ctx.fillStyle = '#e8a87c';
         ctx.fillRect(bx, by, barW * rState.progress, barH);
-        ctx.strokeStyle = '#e8a87c44'; ctx.lineWidth = 1;
-        ctx.strokeRect(bx, by, barW, barH);
+        ctx.strokeStyle = '#e8a87c44'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, barW, barH);
         ctx.fillStyle = '#e8a87c'; ctx.font = `bold 8px 'Share Tech Mono', monospace`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-        ctx.fillText(`x${rState.remaining}`, x, by + barH + 1);
+        ctx.fillText(`×${rState.remaining}🪖`, x, by + barH + 1);
+        ctx.restore();
+      }
+
+      // Barre production (camp militaire)
+      if (pQueue && tile.owner === myId) {
+        const barW = (HEX_SIZE - 2) * Math.sqrt(3) * 0.75;
+        const barH = 4;
+        const bx = x - barW / 2, by = y + HEX_SIZE * 0.38;
+        const now = Date.now();
+        const progress = Math.min(1, Math.max(0, 1 - (pQueue.nextEndsAt - now) / 30000));
+        const secsLeft = Math.ceil(Math.max(0, pQueue.nextEndsAt - now) / 1000);
+        ctx.save();
+        ctx.globalAlpha = 0.8; ctx.fillStyle = '#0a0c0e';
+        ctx.fillRect(bx-1, by-1, barW+2, barH+2);
+        ctx.globalAlpha = 1; ctx.fillStyle = '#8ab4e8';
+        ctx.fillRect(bx, by, barW * progress, barH);
+        ctx.strokeStyle = '#8ab4e844'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, barW, barH);
+        ctx.fillStyle = '#8ab4e8'; ctx.font = `bold 8px 'Share Tech Mono', monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.fillText(`×${pQueue.count}🪖 ${secsLeft}s`, x, by + barH + 1);
         ctx.restore();
       }
     }
@@ -685,9 +740,9 @@ function deployTroopsOnBrush(centerKey) {
 let wheelTargetKey = null;
 
 function closeAll() {
-  ['build-menu', 'recruit-popup'].forEach(id => {
+  ['build-menu', 'recruit-popup', 'camp-popup'].forEach(id => {
     const el = document.getElementById(id);
-    el.classList.remove('active'); el.style.display = 'none';
+    if (el) { el.classList.remove('active'); el.style.display = 'none'; }
   });
   document.getElementById('wheel-overlay').classList.remove('active');
   document.getElementById('wheel-container').innerHTML = '';
@@ -738,21 +793,37 @@ function openBuildMenu(screenX, screenY) {
   const menu = document.getElementById('build-menu');
   const itemsEl = document.getElementById('build-items');
   itemsEl.innerHTML = '';
-  const dynCost = getRecruitPostCost();
-  const canAffordGold = myResources.gold >= dynCost.gold;
-  const canAffordMat = myResources.mat >= dynCost.mat;
-  const canAfford = canAffordGold && canAffordMat;
   const tile = gameMap?.tiles[wheelTargetKey];
-  const alreadyBuilt = tile?.building === 'recruit_post';
-  const item = document.createElement('div');
-  item.className = 'build-item' + (!canAfford || alreadyBuilt ? ' disabled' : '');
-  let costHtml = `<span class="build-cost-tag gold ${!canAffordGold ? 'insufficient' : ''}">💰 ${dynCost.gold}</span>`;
-  costHtml += `<span class="build-cost-tag mat ${!canAffordMat ? 'insufficient' : ''}">🪨 ${dynCost.mat}</span>`;
-  if (dynCost.count > 0) costHtml += `<span class="build-cost-tag info">+50%/poste (x${dynCost.count})</span>`;
-  if (alreadyBuilt) costHtml += '<span class="build-cost-tag" style="color:var(--success);border-color:var(--success)">DÉJÀ CONSTRUIT</span>';
-  item.innerHTML = `<div class="build-item-name">📑 Poste de recrutement</div><div class="build-item-cost">${costHtml}</div>`;
-  if (canAfford && !alreadyBuilt) item.onclick = (e) => { e.stopPropagation(); doBuild('recruit_post', dynCost); };
-  itemsEl.appendChild(item);
+
+  // ── Poste de recrutement ──
+  const dynCost = getRecruitPostCost();
+  const postBuilt = tile?.building === 'recruit_post';
+  const postCanGold = myResources.gold >= dynCost.gold;
+  const postCanMat = myResources.mat >= dynCost.mat;
+  const postItem = document.createElement('div');
+  postItem.className = 'build-item' + (!(postCanGold && postCanMat) || postBuilt ? ' disabled' : '');
+  let postCost = `<span class="build-cost-tag gold ${!postCanGold?'insufficient':''}">💰 ${dynCost.gold}</span>`;
+  postCost += `<span class="build-cost-tag mat ${!postCanMat?'insufficient':''}">🪨 ${dynCost.mat}</span>`;
+  if (dynCost.count > 0) postCost += `<span class="build-cost-tag info">+50%/poste (×${dynCost.count})</span>`;
+  if (postBuilt) postCost += '<span class="build-cost-tag" style="color:var(--success);border-color:var(--success)">DÉJÀ CONSTRUIT</span>';
+  postItem.innerHTML = `<div class="build-item-name">📑 Poste de recrutement</div><div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:6px">Recrute des troupes (20💰/troupe)</div><div class="build-item-cost">${postCost}</div>`;
+  if (postCanGold && postCanMat && !postBuilt) postItem.onclick = (e) => { e.stopPropagation(); doBuild('recruit_post', dynCost); };
+  itemsEl.appendChild(postItem);
+
+  // ── Camp militaire ──
+  const campCost = getMilitaryCampCost();
+  const campBuilt = tile?.building === 'military_camp';
+  const campCanGold = myResources.gold >= campCost.gold;
+  const campCanMat = myResources.mat >= campCost.mat;
+  const campItem = document.createElement('div');
+  campItem.className = 'build-item' + (!(campCanGold && campCanMat) || campBuilt ? ' disabled' : '');
+  let campCostHtml = `<span class="build-cost-tag gold ${!campCanGold?'insufficient':''}">💰 ${campCost.gold}</span>`;
+  campCostHtml += `<span class="build-cost-tag mat ${!campCanMat?'insufficient':''}">🪨 ${campCost.mat}</span>`;
+  if (campBuilt) campCostHtml += '<span class="build-cost-tag" style="color:var(--success);border-color:var(--success)">DÉJÀ CONSTRUIT</span>';
+  campItem.innerHTML = `<div class="build-item-name">⛺ Camp militaire</div><div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:6px">Produit des soldats (100💰+25⚙️, 30s)</div><div class="build-item-cost">${campCostHtml}</div>`;
+  if (campCanGold && campCanMat && !campBuilt) campItem.onclick = (e) => { e.stopPropagation(); doBuild('military_camp', campCost); };
+  itemsEl.appendChild(campItem);
+
   positionPopup(menu, screenX, screenY);
   activateOverlay();
 }
@@ -807,31 +878,109 @@ document.getElementById('recruit-confirm').addEventListener('click', (e) => {
   e.stopPropagation();
   if (!recruitTileKey) return;
   const cost = recruitAmount * TROOP_COST;
-  if (myResources.gold < cost) { showNotif('Pas assez argent', 'error'); return; }
+  if (myResources.gold < cost) { showNotif('Pas assez d\'or', 'error'); return; }
+
   const spreadAll = document.getElementById('recruit-spread').checked;
   const posts = getMyPosts();
-  myResources.gold -= cost; updateResDisplay();
+
   if (spreadAll && posts.length > 1) {
     const perPost = Math.floor(recruitAmount / posts.length);
     let rem = recruitAmount - perPost * posts.length;
-    posts.forEach((key, i) => { const amt = perPost + (i === 0 ? rem : 0); if (amt > 0) startRecruitment(key, amt); });
-    showNotif(`⏳ ${recruitAmount} soldats sur ${posts.length} posts`, 'success');
+    posts.forEach((key, i) => {
+      const amt = perPost + (i === 0 ? rem : 0);
+      if (amt <= 0) return;
+      const t = gameMap.tiles[key];
+      socket.emit('troops:recruit', { col: t.col, row: t.row, amount: amt }, (res) => {
+        if (!res?.success) showNotif(res?.error || 'Erreur recrutement', 'error');
+      });
+    });
+    showNotif(`⏳ ${recruitAmount} soldats répartis sur ${posts.length} posts`, 'success');
   } else {
-    startRecruitment(recruitTileKey, recruitAmount);
-    showNotif(`⏳ ${recruitAmount} soldat(s) en recrutement...`, 'success');
+    const tile = gameMap.tiles[recruitTileKey];
+    socket.emit('troops:recruit', { col: tile.col, row: tile.row, amount: recruitAmount }, (res) => {
+      if (res?.success) {
+        showNotif(`🪖 +${recruitAmount} troupes recrutées !`, 'success');
+      } else {
+        showNotif(res?.error || 'Erreur recrutement', 'error');
+      }
+    });
   }
   closeAll();
 });
 document.getElementById('recruit-close').addEventListener('click', (e) => { e.stopPropagation(); closeAll(); });
 
+// ─── CAMP MILITAIRE POPUP ─────────────────────────────────────────────────────
+let campTileKey = null;
+let campAmount = 1;
+
+function openCampPopup(tileKey, screenX, screenY) {
+  campTileKey = tileKey;
+  campAmount = 1;
+  const maxGold = Math.floor(myResources.gold / 100);
+  const maxMec = Math.floor(myResources.mec / 25);
+  const maxAfford = Math.min(maxGold, maxMec, 20);
+  const queue = productionQueues[tileKey];
+
+  let infoHtml = `100💰 + 25⚙️ par soldat &nbsp;|&nbsp; Max : <span>${Math.max(0, maxAfford)}</span>`;
+  if (queue) infoHtml += `<br>⏳ En file : <span>${queue.count}</span> soldat(s)`;
+  document.getElementById('camp-info').innerHTML = infoHtml;
+
+  const slider = document.getElementById('camp-slider');
+  slider.min = 1;
+  slider.max = Math.max(1, maxAfford);
+  slider.value = 1;
+  updateCampDisplay(maxAfford);
+
+  const popup = document.getElementById('camp-popup');
+  positionPopup(popup, screenX, screenY);
+  activateOverlay();
+}
+
+function updateCampDisplay(maxOverride) {
+  const max = maxOverride ?? Math.min(Math.floor(myResources.gold/100), Math.floor(myResources.mec/25), 20);
+  const slider = document.getElementById('camp-slider');
+  campAmount = Math.max(1, Math.min(parseInt(slider.value)||1, Math.max(1, max)));
+  slider.value = campAmount;
+  document.getElementById('camp-count').textContent = campAmount;
+  document.getElementById('camp-total-cost').textContent = campAmount * 100;
+  document.getElementById('camp-total-mec').textContent = campAmount * 25;
+  document.getElementById('camp-total-time').textContent = campAmount * 30 + 's';
+  document.getElementById('camp-confirm').disabled = max < 1;
+}
+
+document.getElementById('camp-slider').addEventListener('input', (e) => { e.stopPropagation(); updateCampDisplay(); });
+document.getElementById('camp-slider').addEventListener('click', (e) => e.stopPropagation());
+
+document.getElementById('camp-confirm').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!campTileKey) return;
+  const tile = gameMap.tiles[campTileKey];
+  socket.emit('unit:produce', { col: tile.col, row: tile.row, unitId: 'soldier', quantity: campAmount }, (res) => {
+    if (res?.success) {
+      const secs = Math.round((res.endsAt - Date.now()) / 1000);
+      showNotif(`⛺ ${campAmount} soldat(s) en production (~${secs}s)`, 'success');
+    } else {
+      showNotif(res?.error || 'Production impossible', 'error');
+    }
+  });
+  closeAll();
+});
+
+document.getElementById('camp-close').addEventListener('click', (e) => { e.stopPropagation(); closeAll(); });
+
 function doBuild(buildingId, cost) {
   if (!wheelTargetKey) return;
   const tile = gameMap.tiles[wheelTargetKey];
   if (!tile) return;
-  myResources.gold -= cost.gold; myResources.mat -= cost.mat; updateResDisplay();
-  socket.emit('tile:build', { col: tile.col, row: tile.row, buildingId, cost }, (res) => {
-    if (res?.success) { tile.building = buildingId; drawMap(); showNotif('📑 Poste construit !', 'success'); }
-    else { myResources.gold += cost.gold; myResources.mat += cost.mat; updateResDisplay(); showNotif(res?.error || 'Erreur', 'error'); }
+  socket.emit('tile:build', { col: tile.col, row: tile.row, buildingId }, (res) => {
+    if (res?.success) {
+      tile.building = buildingId;
+      drawMap();
+      const names = { recruit_post: '📑 Poste construit !', military_camp: '⛺ Camp militaire construit !' };
+      showNotif(names[buildingId] || 'Bâtiment construit !', 'success');
+    } else {
+      showNotif(res?.error || 'Construction impossible', 'error');
+    }
   });
   closeAll();
 }
@@ -890,8 +1039,11 @@ function initGame(data) {
       const bInfo = tile.building ? ` | ${BUILDINGS[tile.building]?.emoji} ${BUILDINGS[tile.building]?.name}` : '';
       const tInfo = (tile.troops || 0) > 0 ? ` · x${tile.troops}🪖` : '';
       let hint = owner + bInfo + tInfo;
-      if (tile.owner === myId) hint += tile.building === 'recruit_post' ? ' — CLIC recruter' : ' — CLIC construire';
-      else if (adj) hint += ' — CLIC capturer (5💰)';
+      if (tile.owner === myId) {
+        if (tile.building === 'recruit_post') hint += ' — CLIC recruter';
+        else if (tile.building === 'military_camp') hint += ' — CLIC produire';
+        else hint += ' — CLIC construire';
+      } else if (adj) hint += ' — CLIC capturer (5💰)';
       tooltip.style.display = 'block';
       tooltip.style.left = (e.clientX + 12) + 'px'; tooltip.style.top = (e.clientY - 10) + 'px';
       tooltip.textContent = hint; tooltip.style.borderColor = tile.color || 'var(--border)';
@@ -929,8 +1081,13 @@ function initGame(data) {
       const tile = gameMap.tiles[hoveredTile];
       if (tile && tile.active) {
         if (tile.owner === myId) {
-          if (tile.building === 'recruit_post') { closeAll(); openRecruitPopup(hoveredTile, e.clientX, e.clientY); }
-          else { closeAll(); openWheel(e.clientX, e.clientY, hoveredTile); }
+          if (tile.building === 'recruit_post') {
+            closeAll(); openRecruitPopup(hoveredTile, e.clientX, e.clientY);
+          } else if (tile.building === 'military_camp') {
+            closeAll(); openCampPopup(hoveredTile, e.clientX, e.clientY);
+          } else {
+            closeAll(); openWheel(e.clientX, e.clientY, hoveredTile);
+          }
         } else {
           socket.emit('tile:capture', { col: tile.col, row: tile.row }, (res) => {
             if (!res?.success && res?.error) showNotif(res.error, 'error');
