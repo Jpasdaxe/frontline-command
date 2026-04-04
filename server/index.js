@@ -523,6 +523,43 @@ io.on('connection', (socket) => {
     console.log(`[PRODUCE] ${player.name} commande ${qty}× ${unitId}`);
   });
 
+  // ── Déploiement de troupes sur la carte (clic droit pinceau) ──
+  socket.on('troops:deploy', ({ deployments }, cb) => {
+    // deployments = [{ col, row, amount }, ...]
+    const code = playerRoom.get(socket.id);
+    const room = rooms.get(code);
+    if (!room || room.status !== 'playing') return cb?.({ success: false });
+    const player = room.players.get(socket.id);
+    if (!player) return cb?.({ success: false });
+
+    let totalCost = 0;
+    const valid = [];
+
+    for (const d of deployments) {
+      const key = `${d.col},${d.row}`;
+      const tile = room.map.tiles[key];
+      if (!tile || !tile.active || tile.owner !== socket.id) continue;
+      const amount = Math.max(1, Math.floor(d.amount));
+      totalCost += amount;
+      valid.push({ key, tile, amount });
+    }
+
+    if (totalCost > player.troops)
+      return cb?.({ success: false, error: `Pas assez de troupes (${totalCost} requis, ${player.troops} disponibles)` });
+
+    // Appliquer
+    player.troops -= totalCost;
+    const updatedTiles = {};
+    for (const { key, tile, amount } of valid) {
+      tile.troops = (tile.troops || 0) + amount;
+      updatedTiles[key] = tile;
+    }
+
+    broadcastResources(room);
+    io.to(code).emit('map:update', updatedTiles);
+    cb?.({ success: true, troops: player.troops });
+  });
+
   socket.on('disconnect', () => {
     console.log(`[DISCONNECT] ${socket.id}`);
     leaveRoom(socket.id);

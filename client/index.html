@@ -718,6 +718,9 @@ function getHexesInRadius(centerCol, centerRow, radius) {
   return result;
 }
 
+// Accumule les déploiements en attente d'envoi au serveur
+const pendingDeploys = new Map(); // key → amount
+
 function deployTroopsOnBrush(centerKey) {
   if (!gameMap || myTroops <= 0) return;
   const tile = gameMap.tiles[centerKey];
@@ -729,11 +732,30 @@ function deployTroopsOnBrush(centerKey) {
     if (!t || !t.active || t.owner !== myId) continue;
     if (myTroops <= 0) break;
     const amount = Math.min(deployAmount, myTroops);
+    // Mise à jour visuelle locale immédiate
     t.troops = (t.troops || 0) + amount;
     myTroops -= amount;
+    // Accumuler pour envoi serveur
+    pendingDeploys.set(key, (pendingDeploys.get(key) || 0) + amount);
     brushPaintedThisPress.add(key);
     updateResDisplay();
   }
+}
+
+function flushDeploys() {
+  if (pendingDeploys.size === 0) return;
+  const deployments = [];
+  for (const [key, amount] of pendingDeploys) {
+    const [col, row] = key.split(',').map(Number);
+    deployments.push({ col, row, amount });
+  }
+  pendingDeploys.clear();
+  socket.emit('troops:deploy', { deployments }, (res) => {
+    if (!res?.success) {
+      // Le serveur a refusé — on redemande l'état réel
+      showNotif(res?.error || 'Déploiement refusé', 'error');
+    }
+  });
 }
 
 // ─── WHEEL & MENUS ────────────────────────────────────────────────────────────
@@ -1075,6 +1097,7 @@ function initGame(data) {
   canvas.addEventListener('mouseup', (e) => {
     if (e.button === 2) {
       rightMouseDown = false; brushHoveredKeys = new Set(); brushPaintedThisPress.clear();
+      flushDeploys(); // Envoie tous les déploiements au serveur
       drawMap(); return;
     }
     if (!isDragging && hoveredTile) {
@@ -1103,6 +1126,7 @@ function initGame(data) {
     isDragging = false; dragStart = null;
     rightMouseDown = false; brushHoveredKeys = new Set();
     brushCursorX = null; brushCursorY = null;
+    flushDeploys();
     drawMap();
   });
 
