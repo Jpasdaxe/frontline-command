@@ -351,8 +351,10 @@ function serializeUnit(u) {
     id: u.id, playerId: u.playerId, color: u.color,
     col: u.col, row: u.row,
     type: u.type, hp: u.hp, maxHp: u.maxHp,
-    state: u.state, path: u.path,
+    state: u.state, path: u.path, pathIndex: u.pathIndex || 0,
     attackTarget: u.attackTarget || null,
+    captureEndsAt: u.captureEndsAt || null,
+    lastAttackTime: u.lastAttackTime || 0,
   };
 }
 
@@ -361,62 +363,133 @@ function serializeUnit(u) {
 function processUnits(room) {
   if (!room.units || room.units.size === 0) return;
   const now = Date.now();
-  const updatedUnits = [];
+  const updatedUnits = new Set();
   const updatedTiles = {};
 
-  for (const [, unit] of room.units) {
-    // Déplacement
-    if (unit.state === 'moving' && unit.path && unit.path.length > 0) {
-      const moveTime = UNITS_DEF[unit.type].moveSpeed;
-      const elapsed = now - unit.moveStartTime;
-      if (elapsed >= moveTime) {
-        // Avancer d'un pas
-        const nextKey = unit.path[unit.pathIndex];
-        if (nextKey) {
-          const [nc, nr] = nextKey.split(',').map(Number);
-          unit.col = nc; unit.row = nr;
-          unit.pathIndex++;
-          unit.moveStartTime = now;
+  for (const [unitId, unit] of room.units) {
 
-          // Vérifier si arrivé à destination ou hex ennemi adjacent
-          const tile = room.map.tiles[nextKey];
-          if (tile && tile.owner && tile.owner !== unit.playerId) {
-            // Hex ennemi atteint → attaquer
-            unit.state = 'attacking';
+    // ── DÉPLACEMENT ────────────────────────────────────────────────────────────
+    if (unit.state === 'moving' && unit.path && unit.pathIndex < unit.path.length) {
+      const moveTime = UNITS_DEF[unit.type]?.moveSpeed || 10000;
+      if (now - unit.moveStartTime >= moveTime) {
+        const nextKey = unit.path[unit.pathIndex];
+        const [nc, nr] = nextKey.split(',').map(Number);
+        unit.col = nc; unit.row = nr;
+        unit.pathIndex++;
+        unit.moveStartTime = now;
+
+        const tile = room.map.tiles[nextKey];
+        // Si on arrive sur un hex ennemi → passer en état attacking
+        if (tile && tile.owner && tile.owner !== unit.playerId) {
+          unit.state = 'attacking';
+          unit.attackTarget = nextKey;
+          unit.lastAttackTime = 0;
+          unit.captureTimer = null;
+          unit.captureEndsAt = null;
+          unit.path = []; unit.pathIndex = 0;
+        } else if (unit.pathIndex >= unit.path.length) {
+          // Destination atteinte
+          unit.state = 'idle';
+          unit.path = []; unit.pathIndex = 0;
+          // Si destination neutre ou à nous → lancer capture si neutre
+          if (tile && !tile.owner) {
+            unit.state = 'capturing';
             unit.attackTarget = nextKey;
-            unit.lastAttackTime = now;
-            unit.path = [];
-          } else if (unit.pathIndex >= unit.path.length) {
-            unit.state = 'idle';
-            unit.path = [];
+            unit.captureTimer = now;
+            unit.captureEndsAt = now + 5000;
           }
-          updatedUnits.push(unit);
         }
+        updatedUnits.add(unit);
       }
+      continue; // ne pas faire attaque et déplacement dans le même tick
     }
 
-    // Attaque
+    // ── CAPTURE (hex neutre) ────────────────────────────────────────────────────
+    if (unit.state === 'capturing' && unit.attackTarget) {
+      const tile = room.map.tiles[unit.attackTarget];
+      if (!tile || tile.owner) {
+        // Tile reprise par quelqu'un → annuler
+        unit.state = 'idle'; unit.attackTarget = null;
+        unit.captureTimer = null; unit.captureEndsAt = null;
+        updatedUnits.add(unit);
+        continue;
+      }
+      if (now >= unit.captureEndsAt) {
+        tile.owner = unit.playerId;
+        const player = room.players.get(unit.playerId);
+        tile.color = player?.color || '#fff';
+        updatedTiles[unit.attackTarget] = tile;
+        unit.state = 'idle'; unit.attackTarget = null;
+        unit.captureTimer = null; unit.captureEndsAt = null;
+        updatedUnits.add(unit);
+
+        const activeTiles = Object.values(room.map.tiles).filter(t => t.active).length;
+        const owned = Object.values(room.map.tiles).filter(t => t.owner === unit.playerId).length;
+        if (owned / activeTiles >= 0.6) {
+          clearInterval(room.tickInterval);
+          const p = room.players.get(unit.playerId);
+          io.to(room.code).emit('game:over', { winner: { id: unit.playerId, name: p?.name, color: p?.color } });
+        }
+      }
+      // Pas besoin de continue, l'unité attend
+    }
+
+    // ── ATTAQUE (hex ennemi) ────────────────────────────────────────────────────
     if (unit.state === 'attacking' && unit.attackTarget) {
       const def = UNITS_DEF[unit.type];
       const tile = room.map.tiles[unit.attackTarget];
 
-      // Vérifier que la tile est toujours ennemie
-      if (!tile || tile.owner === unit.playerId || !tile.owner) {
-        // Plus d'ennemi — capturer si pas de troupes
-        if (tile && !tile.owner) {
-          // Timer de 5s pour capturer
-          if (!unit.captureTimer) unit.captureTimer = now;
-          if (now - unit.captureTimer >= 5000) {
+      if (!tile) { unit.state = 'idle'; unit.attackTarget = null; updatedUnits.add(unit); continue; }
+
+      // La tile est maintenant à nous ou neutre → changer d'état
+      if (tile.owner === unit.playerId) {
+        unit.state = 'idle'; unit.attackTarget = null; unit.captureTimer = null; unit.captureEndsAt = null;
+        updatedUnits.add(unit); continue;
+      }
+
+      if (!tile.owner) {
+        // Tile devenue neutre (l'ennemi a quitté) → capturer
+        unit.state = 'capturing';
+        unit.captureTimer = now;
+        unit.captureEndsAt = now + 5000;
+        updatedUnits.add(unit); continue;
+      }
+
+      // Tile toujours ennemie → attaquer toutes les attackSpeed ms
+      if (now - (unit.lastAttackTime || 0) >= def.attackSpeed) {
+        unit.lastAttackTime = now;
+
+        if ((tile.troops || 0) > 0) {
+          // Retirer une troupe défensrice
+          tile.troops = Math.max(0, tile.troops - 1);
+          updatedTiles[unit.attackTarget] = tile;
+
+          // Contre-attaque : 1 chance sur resistance de perdre 1PV
+          if (Math.random() < 1 / def.resistance) {
+            unit.hp--;
+            if (unit.hp <= 0) {
+              room.units.delete(unitId);
+              io.to(room.code).emit('unit:remove', { id: unitId });
+              continue;
+            }
+          }
+          updatedUnits.add(unit);
+        } else {
+          // Plus de troupes → lancer le timer de capture (5s)
+          if (!unit.captureTimer) {
+            unit.captureTimer = now;
+            unit.captureEndsAt = now + 5000;
+            updatedUnits.add(unit);
+          } else if (now >= unit.captureEndsAt) {
+            // Capturer !
             tile.owner = unit.playerId;
             const player = room.players.get(unit.playerId);
             tile.color = player?.color || '#fff';
             updatedTiles[unit.attackTarget] = tile;
-            unit.state = 'idle';
-            unit.attackTarget = null;
-            unit.captureTimer = null;
-            updatedUnits.push(unit);
+            unit.state = 'idle'; unit.attackTarget = null;
+            unit.captureTimer = null; unit.captureEndsAt = null;
+            updatedUnits.add(unit);
 
-            // Vérif victoire
             const activeTiles = Object.values(room.map.tiles).filter(t => t.active).length;
             const owned = Object.values(room.map.tiles).filter(t => t.owner === unit.playerId).length;
             if (owned / activeTiles >= 0.6) {
@@ -425,48 +498,14 @@ function processUnits(room) {
               io.to(room.code).emit('game:over', { winner: { id: unit.playerId, name: p?.name, color: p?.color } });
             }
           }
-        } else {
-          unit.state = 'idle';
-          unit.attackTarget = null;
-          unit.captureTimer = null;
-          updatedUnits.push(unit);
         }
-        continue;
-      }
-
-      unit.captureTimer = null;
-
-      // Attaque toutes les attackSpeed ms
-      if (now - (unit.lastAttackTime || 0) >= def.attackSpeed) {
-        unit.lastAttackTime = now;
-
-        if ((tile.troops || 0) > 0) {
-          // Troupes présentes — attaquer une troupe
-          tile.troops--;
-          updatedTiles[unit.attackTarget] = tile;
-
-          // L'unité peut perdre un PV (1 chance sur resistance)
-          if (Math.random() < 1 / def.resistance) {
-            unit.hp--;
-            if (unit.hp <= 0) {
-              // Unité détruite
-              room.units.delete(unit.id);
-              io.to(room.code).emit('unit:remove', { id: unit.id });
-              continue;
-            }
-          }
-        } else {
-          // Plus de troupes — lancer le timer de capture (5s)
-          if (!unit.captureTimer) unit.captureTimer = now;
-        }
-        updatedUnits.push(unit);
       }
     }
   }
 
-  // Broadcast des changements
-  if (updatedUnits.length > 0) {
-    io.to(room.code).emit('units:batch', updatedUnits.map(serializeUnit));
+  // Broadcast
+  if (updatedUnits.size > 0) {
+    io.to(room.code).emit('units:batch', [...updatedUnits].map(serializeUnit));
   }
   if (Object.keys(updatedTiles).length > 0) {
     io.to(room.code).emit('map:update', updatedTiles);

@@ -702,137 +702,187 @@ function drawMap() {
   }
   ctx.restore();
 
-  // ── Rendu des unités (coordonnées monde) ──────────────────────────────────
+  // ── Rendu des unités ───────────────────────────────────────────────────────
   ctx.save();
   ctx.translate(offsetX, offsetY);
+  const now = Date.now();
 
-  // Grouper les unités par case pour le stacking
-  const unitsByTile = new Map();
+  // Grouper UNIQUEMENT les unités de la même équipe sur la même case
+  const unitsByTileTeam = new Map(); // `col,row,playerId` → [units]
   for (const u of gameUnits.values()) {
-    const k = `${u.col},${u.row}`;
-    if (!unitsByTile.has(k)) unitsByTile.set(k, []);
-    unitsByTile.get(k).push(u);
+    const k = `${u.col},${u.row},${u.playerId}`;
+    if (!unitsByTileTeam.has(k)) unitsByTileTeam.set(k, []);
+    unitsByTileTeam.get(k).push(u);
   }
 
-  for (const [tileKey, units] of unitsByTile) {
-    const [tc, tr] = tileKey.split(',').map(Number);
-    const { x, y } = hexToPixel(tc, tr);
+  for (const [, units] of unitsByTileTeam) {
+    const rep = units[0];
+    const { x, y } = hexToPixel(rep.col, rep.row);
     const count = units.length;
+    const isMine = rep.playerId === myId;
     const isSelected = units.some(u => u.id === selectedUnitId);
-    const isMine = units.some(u => u.playerId === myId);
-    const rep = units[0]; // représentant
     const def = UNIT_DEFS_CLIENT[rep.type] || { emoji: '🪖', color: '#e8a87c' };
+    const ux = x, uy = y - HEX_SIZE * 0.52;
 
-    // Position : légèrement vers le haut pour ne pas masquer les troupes
-    const ux = x, uy = y - HEX_SIZE * 0.55;
-
-    // Fond de l'unité
+    // ── Fond badge ──
     ctx.save();
-    ctx.globalAlpha = isSelected ? 1 : 0.92;
-    ctx.fillStyle = isSelected ? '#ffffff' : (rep.color || def.color);
+    const pulse = 0.85 + 0.15 * Math.sin(now / 300);
+    ctx.globalAlpha = isSelected ? 1 : 0.93;
+    ctx.fillStyle = isSelected ? '#fff' : (isMine ? (myColor || def.color) : (rep.color || '#c84b4b'));
     ctx.beginPath();
-    ctx.roundRect(ux - 12, uy - 11, 24, 22, 4);
+    ctx.roundRect(ux - 13, uy - 12, 26, 23, 5);
     ctx.fill();
 
-    // Bordure sélection pulsée
+    // Bordure sélection animée
     if (isSelected) {
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    } else if (isMine) {
-      ctx.strokeStyle = rep.color || def.color;
-      ctx.lineWidth = 1.5;
-      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = myColor || '#fff';
+      ctx.lineWidth = 2.5;
+      ctx.globalAlpha = pulse;
       ctx.stroke();
     }
     ctx.restore();
 
-    // Emoji unité
+    // ── Emoji ──
     ctx.font = `13px serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.globalAlpha = 1;
-    ctx.fillText(def.emoji, ux, uy - 1);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.globalAlpha = 1;
+    ctx.fillText(def.emoji, ux, uy);
 
-    // Nombre si stack > 1
+    // ── Stack badge ──
     if (count > 1) {
       ctx.save();
       ctx.fillStyle = '#0a0c0e';
-      ctx.beginPath();
-      ctx.arc(ux + 9, uy - 8, 7, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(ux + 10, uy - 9, 7, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.font = `bold 8px 'Share Tech Mono', monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(count > 9 ? '9+' : count, ux + 9, uy - 8);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(count > 9 ? '9+' : String(count), ux + 10, uy - 9);
       ctx.restore();
     }
 
-    // Barre de PV (si endommagée)
-    if (rep.hp < rep.maxHp) {
-      const bw = 22, bh = 3;
-      const bx = ux - bw / 2, by = uy + 10;
-      ctx.save();
-      ctx.fillStyle = '#0a0c0e'; ctx.fillRect(bx, by, bw, bh);
-      ctx.fillStyle = '#4bc88a';
-      ctx.fillRect(bx, by, bw * (rep.hp / rep.maxHp), bh);
-      ctx.restore();
-    }
+    // ── Barre PV ──
+    const bw = 24, bh = 3, bx = ux - bw/2, by = uy + 11;
+    ctx.save();
+    ctx.fillStyle = '#0a0c0e'; ctx.globalAlpha = 0.8; ctx.fillRect(bx, by, bw, bh);
+    const hpRatio = rep.hp / rep.maxHp;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = hpRatio > 0.5 ? '#4bc88a' : hpRatio > 0.25 ? '#c8a84b' : '#c84b4b';
+    ctx.fillRect(bx, by, bw * hpRatio, bh);
+    ctx.restore();
 
-    // Indicateur état (attaque = rouge pulsé)
+    // ── Effets et chrono selon l'état ──
     if (rep.state === 'attacking') {
+      // Pulsation rouge
       ctx.save();
-      ctx.globalAlpha = 0.5 + 0.4 * Math.sin(Date.now() / 200);
+      ctx.globalAlpha = 0.4 + 0.4 * Math.sin(now / 150);
       ctx.strokeStyle = '#c84b4b';
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(ux - 13, uy - 12, 26, 24, 5);
-      ctx.stroke();
+      ctx.beginPath(); ctx.roundRect(ux - 14, uy - 13, 28, 25, 6); ctx.stroke();
+      ctx.restore();
+      // Label ⚔
+      ctx.save();
+      ctx.font = `bold 9px 'Share Tech Mono', monospace`;
+      ctx.fillStyle = '#c84b4b'; ctx.globalAlpha = 0.9;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('⚔', ux, uy - 14);
+      ctx.restore();
+    }
+
+    if (rep.state === 'capturing' || (rep.state === 'attacking' && rep.captureEndsAt)) {
+      const endsAt = rep.captureEndsAt;
+      if (endsAt) {
+        const remaining = Math.max(0, Math.ceil((endsAt - now) / 1000));
+        const progress = 1 - Math.max(0, (endsAt - now) / 5000);
+        // Arc de capture
+        ctx.save();
+        ctx.strokeStyle = '#4bc88a';
+        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.arc(ux, uy, 17, -Math.PI/2, -Math.PI/2 + progress * 2 * Math.PI);
+        ctx.stroke();
+        // Chrono
+        ctx.fillStyle = '#4bc88a';
+        ctx.font = `bold 9px 'Share Tech Mono', monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText(`${remaining}s`, ux, uy - 16);
+        ctx.restore();
+      }
+    }
+
+    if (rep.state === 'moving') {
+      // Indicateur mouvement (petite flèche animée)
+      ctx.save();
+      ctx.globalAlpha = 0.6 + 0.3 * Math.sin(now / 200);
+      ctx.strokeStyle = isMine ? (myColor || '#fff') : (rep.color || '#fff');
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.roundRect(ux - 14, uy - 13, 28, 25, 6); ctx.stroke();
       ctx.restore();
     }
   }
 
-  // ── Flèche de destination (drag unité) ────────────────────────────────────
-  if (selectedUnitId && unitDragTarget) {
+  // ── Chemin de déplacement des unités en mouvement (trait + flèche persistante) ──
+  for (const u of gameUnits.values()) {
+    if (u.playerId !== myId) continue;
+    // Afficher le chemin restant pour mes unités en déplacement
+    const remainingPath = (u.path || []).slice(u.pathIndex || 0);
+    if ((u.state === 'moving' || u.state === 'attacking') && remainingPath.length > 0) {
+      const stops = [{ col: u.col, row: u.row }, ...remainingPath.map(k => { const [c,r]=k.split(',').map(Number); return {col:c,row:r}; })];
+      ctx.save();
+      ctx.strokeStyle = myColor || '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      stops.forEach((s, i) => {
+        const { x, y } = hexToPixel(s.col, s.row);
+        i === 0 ? ctx.moveTo(x, y - HEX_SIZE * 0.52) : ctx.lineTo(x, y - HEX_SIZE * 0.52);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Flèche à la destination finale
+      const last = stops[stops.length - 1];
+      const prev = stops[stops.length - 2] || stops[0];
+      const { x: ex, y: ey } = hexToPixel(last.col, last.row);
+      const { x: px2, y: py2 } = hexToPixel(prev.col, prev.row);
+      const angle = Math.atan2(ey - py2, ex - px2);
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = myColor || '#fff';
+      ctx.beginPath();
+      ctx.moveTo(ex, ey - HEX_SIZE * 0.52);
+      ctx.lineTo(ex - 10*Math.cos(angle-0.5), ey - HEX_SIZE*0.52 - 10*Math.sin(angle-0.5));
+      ctx.lineTo(ex - 10*Math.cos(angle+0.5), ey - HEX_SIZE*0.52 - 10*Math.sin(angle+0.5));
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ── Flèche de destination (drag en cours) ─────────────────────────────────
+  if (selectedUnitId && unitDragTarget && isDraggingUnit) {
     const unit = gameUnits.get(selectedUnitId);
     if (unit) {
       const { x: sx, y: sy } = hexToPixel(unit.col, unit.row);
       const { x: ex, y: ey } = hexToPixel(unitDragTarget.col, unitDragTarget.row);
-      const syu = sy - HEX_SIZE * 0.55;
+      const suy = sy - HEX_SIZE * 0.52, euy = ey - HEX_SIZE * 0.52;
+      const angle = Math.atan2(euy - suy, ex - sx);
+      const targetTile = gameMap?.tiles[`${unitDragTarget.col},${unitDragTarget.row}`];
+      const isEnemy = targetTile?.owner && targetTile.owner !== myId;
+      const lineColor = isEnemy ? '#c84b4b' : '#4bc88a';
 
       ctx.save();
-      ctx.strokeStyle = unit.playerId === myId ? myColor : (unit.color || '#fff');
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.globalAlpha = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(sx, syu);
-      ctx.lineTo(ex, ey - HEX_SIZE * 0.55);
-      ctx.stroke();
+      ctx.strokeStyle = lineColor; ctx.lineWidth = 2;
+      ctx.setLineDash([7, 4]); ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.moveTo(sx, suy); ctx.lineTo(ex, euy); ctx.stroke();
       ctx.setLineDash([]);
-
-      // Tête de flèche
-      const angle = Math.atan2(ey - syu, ex - sx);
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = unit.playerId === myId ? myColor : (unit.color || '#fff');
+      ctx.fillStyle = lineColor; ctx.globalAlpha = 1;
       ctx.beginPath();
-      ctx.moveTo(ex, ey - HEX_SIZE * 0.55);
-      ctx.lineTo(ex - 12 * Math.cos(angle - 0.4), ey - HEX_SIZE * 0.55 - 12 * Math.sin(angle - 0.4));
-      ctx.lineTo(ex - 12 * Math.cos(angle + 0.4), ey - HEX_SIZE * 0.55 - 12 * Math.sin(angle + 0.4));
-      ctx.closePath();
-      ctx.fill();
-
-      // Label destination
-      const targetTile = gameMap?.tiles[`${unitDragTarget.col},${unitDragTarget.row}`];
-      if (targetTile) {
-        const isEnemy = targetTile.owner && targetTile.owner !== myId;
-        ctx.fillStyle = isEnemy ? '#c84b4b' : '#4bc88a';
-        ctx.font = `bold 10px 'Share Tech Mono', monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(isEnemy ? '⚔ ATTAQUER' : '→ ALLER', ex, ey - HEX_SIZE * 0.55 - 14);
-      }
+      ctx.moveTo(ex, euy);
+      ctx.lineTo(ex - 13*Math.cos(angle-0.4), euy - 13*Math.sin(angle-0.4));
+      ctx.lineTo(ex - 13*Math.cos(angle+0.4), euy - 13*Math.sin(angle+0.4));
+      ctx.closePath(); ctx.fill();
+      // Label
+      ctx.font = `bold 10px 'Share Tech Mono', monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText(isEnemy ? '⚔ ATTAQUER' : '→ DÉPLACER', ex, euy - 16);
       ctx.restore();
     }
   }
@@ -961,7 +1011,7 @@ function flushDeploys() {
 let wheelTargetKey = null;
 
 function closeAll() {
-  ['build-menu', 'recruit-popup', 'camp-popup'].forEach(id => {
+  ['build-menu', 'recruit-popup', 'camp-popup', 'unit-popup'].forEach(id => {
     const el = document.getElementById(id);
     if (el) { el.classList.remove('active'); el.style.display = 'none'; }
   });
@@ -1235,39 +1285,68 @@ function doBuild(buildingId, cost) {
 // ─── POPUP UNITÉ ─────────────────────────────────────────────────────────────
 function openUnitPopup(unitId, screenX, screenY) {
   const u = gameUnits.get(unitId);
-  if (!u) return;
+  if (!u || u.playerId !== myId) return;
 
-  // Compter les unités stackées sur la même case
-  const stacked = [...gameUnits.values()].filter(x => x.col === u.col && x.row === u.row);
+  const stacked = [...gameUnits.values()].filter(x => x.col === u.col && x.row === u.row && x.playerId === myId);
+  const stateLabel = { idle: 'En attente', moving: 'En déplacement', attacking: '⚔ En combat', capturing: '🏳 Capture en cours' };
 
-  // Créer popup dynamique
+  let captureInfo = '';
+  if (u.captureEndsAt) {
+    const secs = Math.max(0, Math.ceil((u.captureEndsAt - Date.now()) / 1000));
+    captureInfo = `<div style="color:#4bc88a">Capture dans <b>${secs}s</b></div>`;
+  }
+
   let popup = document.getElementById('unit-popup');
   if (!popup) {
     popup = document.createElement('div');
     popup.id = 'unit-popup';
-    popup.style.cssText = `position:fixed;z-index:95;background:var(--surface);border:1px solid var(--border);border-left:3px solid #8ab4e8;min-width:220px;display:none;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.6);cursor:default;`;
+    popup.style.cssText = 'position:fixed;z-index:95;background:var(--surface);border:1px solid var(--border);border-left:3px solid #8ab4e8;min-width:230px;display:none;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.6);cursor:default;';
     document.getElementById('wheel-overlay').appendChild(popup);
   }
 
-  const stateLabel = { idle: 'En attente', moving: 'En déplacement', attacking: 'En combat' };
   popup.innerHTML = `
-    <div style="font-family:var(--mono);font-size:10px;letter-spacing:3px;color:#8ab4e8;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2)">🪖 UNITÉ — ${stacked.length > 1 ? stacked.length + ' SOLDATS STACKÉS' : 'SOLDAT'}</div>
-    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted)">
-      <div>PV : <span style="color:var(--accent)">${u.hp}/${u.maxHp}</span></div>
-      <div>État : <span style="color:var(--text)">${stateLabel[u.state] || u.state}</span></div>
-      ${u.state !== 'idle' ? `<button onclick="stopSelectedUnit()" style="font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:2px;padding:8px;border:1px solid var(--danger);color:var(--danger);background:transparent;cursor:pointer;">⏹ ARRÊTER</button>` : ''}
+    <div style="font-family:var(--mono);font-size:10px;letter-spacing:3px;color:#8ab4e8;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2)">
+      🪖 ${stacked.length > 1 ? stacked.length + ' SOLDATS STACKÉS' : 'SOLDAT'}
     </div>
-    <div id="unit-popup-close" style="padding:8px 16px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:2px;cursor:pointer;text-align:center;border-top:1px solid var(--border);">✕ FERMER</div>
+    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:1px">
+      <div>PV : <span style="color:var(--accent)">${u.hp} / ${u.maxHp}</span>
+        <span style="display:inline-block;background:var(--border);width:60px;height:5px;vertical-align:middle;margin-left:6px;border-radius:2px">
+          <span style="display:block;background:#4bc88a;width:${Math.round(u.hp/u.maxHp*100)}%;height:100%;border-radius:2px"></span>
+        </span>
+      </div>
+      <div>État : <span style="color:var(--text)">${stateLabel[u.state] || u.state}</span></div>
+      ${captureInfo}
+      ${u.state !== 'idle' ? '<button id="unit-stop-btn" style="font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:2px;padding:8px;border:1px solid var(--danger);color:var(--danger);background:transparent;cursor:pointer;margin-top:4px;">⏹ ARRÊTER</button>' : ''}
+    </div>
+    <div id="unit-popup-close-btn" style="padding:8px 16px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:2px;cursor:pointer;text-align:center;border-top:1px solid var(--border);transition:color .12s;">✕ FERMER</div>
   `;
 
   positionPopup(popup, screenX, screenY);
   activateOverlay();
 
-  popup.querySelector('#unit-popup-close')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    selectedUnitId = null; unitDragTarget = null;
-    closeAll();
-  });
+  // Listeners propres — stopPropagation pour ne pas déclencher le bg-click
+  const stopBtn = popup.querySelector('#unit-stop-btn');
+  if (stopBtn) {
+    stopBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      stopSelectedUnit();
+      closeAll();
+    });
+  }
+
+  const closeBtn = popup.querySelector('#unit-popup-close-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedUnitId = null; unitDragTarget = null;
+      closeAll();
+    });
+    closeBtn.addEventListener('mouseenter', () => closeBtn.style.color = 'var(--danger)');
+    closeBtn.addEventListener('mouseleave', () => closeBtn.style.color = 'var(--muted)');
+  }
+
+  // Empêcher le bg-click de se propager depuis la popup
+  popup.addEventListener('click', (e) => e.stopPropagation());
 }
 
 // ─── INIT GAME ───────────────────────────────────────────────────────────────
