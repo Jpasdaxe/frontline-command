@@ -234,9 +234,29 @@ function processProduction(room) {
       const item = queue.shift();
       const player = room.players.get(item.playerId);
       if (player) {
-        player.troops += 1;
-        resourcesChanged = true;
-        console.log(`[PROD] ${player.name} +1 ${item.unitId} (total: ${player.troops})`);
+        // Créer l'unité sur le camp
+        const tile = room.map?.tiles[tileKey];
+        if (tile) {
+          const def = UNITS_DEF[item.unitId];
+          const unit = {
+            id: `u${room.nextUnitId++}`,
+            playerId: item.playerId,
+            color: player.color,
+            type: item.unitId,
+            col: tile.col, row: tile.row,
+            hp: def.hp, maxHp: def.maxHp,
+            state: 'idle',
+            path: [], pathIndex: 0,
+            moveStartTime: 0,
+            lastAttackTime: 0,
+            attackTarget: null,
+            captureTimer: null,
+          };
+          room.units.set(unit.id, unit);
+          io.to(room.code).emit('unit:update', serializeUnit(unit));
+          resourcesChanged = true;
+          console.log(`[PROD] ${player.name} +1 ${item.unitId} (id: ${unit.id})`);
+        }
       }
     }
 
@@ -266,11 +286,201 @@ function processProduction(room) {
   io.to(room.code).emit('production:update', queuesState);
 }
 
+// ─── PATHFINDING A* HEX ──────────────────────────────────────────────────────
+
+function hexDistance(c1, r1, c2, r2) {
+  // Distance approximative en hex
+  return Math.sqrt((c1-c2)**2 + (r1-r2)**2);
+}
+
+function findPath(map, startCol, startRow, endCol, endRow) {
+  const key = (c,r) => `${c},${r}`;
+  const open = new Map();
+  const closed = new Set();
+  const gScore = new Map();
+  const fScore = new Map();
+  const parent = new Map();
+
+  const startKey = key(startCol, startRow);
+  const endKey = key(endCol, endRow);
+
+  open.set(startKey, { col: startCol, row: startRow });
+  gScore.set(startKey, 0);
+  fScore.set(startKey, hexDistance(startCol, startRow, endCol, endRow));
+
+  let iterations = 0;
+  while (open.size > 0 && iterations++ < 500) {
+    // Trouver le noeud avec le plus petit fScore
+    let current = null, bestF = Infinity;
+    for (const [k, node] of open) {
+      const f = fScore.get(k) ?? Infinity;
+      if (f < bestF) { bestF = f; current = k; }
+    }
+    if (!current) break;
+    if (current === endKey) {
+      // Reconstruire le chemin
+      const path = [];
+      let c = current;
+      while (parent.has(c)) { path.unshift(c); c = parent.get(c); }
+      return path;
+    }
+    const node = open.get(current);
+    open.delete(current);
+    closed.add(current);
+
+    for (const nb of getNeighbors(node.col, node.row, map.cols, map.rows)) {
+      const nbKey = key(nb.col, nb.row);
+      if (closed.has(nbKey)) continue;
+      const tile = map.tiles[nbKey];
+      if (!tile || !tile.active) continue;
+
+      const tentativeG = (gScore.get(current) ?? Infinity) + 1;
+      if (tentativeG < (gScore.get(nbKey) ?? Infinity)) {
+        parent.set(nbKey, current);
+        gScore.set(nbKey, tentativeG);
+        fScore.set(nbKey, tentativeG + hexDistance(nb.col, nb.row, endCol, endRow));
+        open.set(nbKey, nb);
+      }
+    }
+  }
+  return null; // pas de chemin
+}
+
+function serializeUnit(u) {
+  return {
+    id: u.id, playerId: u.playerId, color: u.color,
+    col: u.col, row: u.row,
+    type: u.type, hp: u.hp, maxHp: u.maxHp,
+    state: u.state, path: u.path,
+    attackTarget: u.attackTarget || null,
+  };
+}
+
+// ─── TICK UNITÉS ─────────────────────────────────────────────────────────────
+
+function processUnits(room) {
+  if (!room.units || room.units.size === 0) return;
+  const now = Date.now();
+  const updatedUnits = [];
+  const updatedTiles = {};
+
+  for (const [, unit] of room.units) {
+    // Déplacement
+    if (unit.state === 'moving' && unit.path && unit.path.length > 0) {
+      const moveTime = UNITS_DEF[unit.type].moveSpeed;
+      const elapsed = now - unit.moveStartTime;
+      if (elapsed >= moveTime) {
+        // Avancer d'un pas
+        const nextKey = unit.path[unit.pathIndex];
+        if (nextKey) {
+          const [nc, nr] = nextKey.split(',').map(Number);
+          unit.col = nc; unit.row = nr;
+          unit.pathIndex++;
+          unit.moveStartTime = now;
+
+          // Vérifier si arrivé à destination ou hex ennemi adjacent
+          const tile = room.map.tiles[nextKey];
+          if (tile && tile.owner && tile.owner !== unit.playerId) {
+            // Hex ennemi atteint → attaquer
+            unit.state = 'attacking';
+            unit.attackTarget = nextKey;
+            unit.lastAttackTime = now;
+            unit.path = [];
+          } else if (unit.pathIndex >= unit.path.length) {
+            unit.state = 'idle';
+            unit.path = [];
+          }
+          updatedUnits.push(unit);
+        }
+      }
+    }
+
+    // Attaque
+    if (unit.state === 'attacking' && unit.attackTarget) {
+      const def = UNITS_DEF[unit.type];
+      const tile = room.map.tiles[unit.attackTarget];
+
+      // Vérifier que la tile est toujours ennemie
+      if (!tile || tile.owner === unit.playerId || !tile.owner) {
+        // Plus d'ennemi — capturer si pas de troupes
+        if (tile && !tile.owner) {
+          // Timer de 5s pour capturer
+          if (!unit.captureTimer) unit.captureTimer = now;
+          if (now - unit.captureTimer >= 5000) {
+            tile.owner = unit.playerId;
+            const player = room.players.get(unit.playerId);
+            tile.color = player?.color || '#fff';
+            updatedTiles[unit.attackTarget] = tile;
+            unit.state = 'idle';
+            unit.attackTarget = null;
+            unit.captureTimer = null;
+            updatedUnits.push(unit);
+
+            // Vérif victoire
+            const activeTiles = Object.values(room.map.tiles).filter(t => t.active).length;
+            const owned = Object.values(room.map.tiles).filter(t => t.owner === unit.playerId).length;
+            if (owned / activeTiles >= 0.6) {
+              clearInterval(room.tickInterval);
+              const p = room.players.get(unit.playerId);
+              io.to(room.code).emit('game:over', { winner: { id: unit.playerId, name: p?.name, color: p?.color } });
+            }
+          }
+        } else {
+          unit.state = 'idle';
+          unit.attackTarget = null;
+          unit.captureTimer = null;
+          updatedUnits.push(unit);
+        }
+        continue;
+      }
+
+      unit.captureTimer = null;
+
+      // Attaque toutes les attackSpeed ms
+      if (now - (unit.lastAttackTime || 0) >= def.attackSpeed) {
+        unit.lastAttackTime = now;
+
+        if ((tile.troops || 0) > 0) {
+          // Troupes présentes — attaquer une troupe
+          tile.troops--;
+          updatedTiles[unit.attackTarget] = tile;
+
+          // L'unité peut perdre un PV (1 chance sur resistance)
+          if (Math.random() < 1 / def.resistance) {
+            unit.hp--;
+            if (unit.hp <= 0) {
+              // Unité détruite
+              room.units.delete(unit.id);
+              io.to(room.code).emit('unit:remove', { id: unit.id });
+              continue;
+            }
+          }
+        } else {
+          // Plus de troupes — lancer le timer de capture (5s)
+          if (!unit.captureTimer) unit.captureTimer = now;
+        }
+        updatedUnits.push(unit);
+      }
+    }
+  }
+
+  // Broadcast des changements
+  if (updatedUnits.length > 0) {
+    io.to(room.code).emit('units:batch', updatedUnits.map(serializeUnit));
+  }
+  if (Object.keys(updatedTiles).length > 0) {
+    io.to(room.code).emit('map:update', updatedTiles);
+    broadcastResources(room);
+  }
+}
+
 // ─── GAME START ───────────────────────────────────────────────────────────────
 
 function startGame(room) {
   room.status = 'playing';
   room.map = generateMap(10, 8);
+  room.units = new Map(); // id → unit
+  room.nextUnitId = 1;
   const playerList = Array.from(room.players.values());
   const starts = chooseStartPositions(room.map, playerList.length);
 
@@ -282,6 +492,23 @@ function startGame(room) {
     tile.color = player.color;
     player.resources = { gold: 500, mat: 500, mec: 500, fuel: 500 };
     player.troops = 0;
+
+    // Donner 1 soldat de départ sur la case de départ
+    const startUnit = {
+      id: `u${room.nextUnitId++}`,
+      playerId: player.id,
+      color: player.color,
+      type: 'soldier',
+      col: pos.col, row: pos.row,
+      hp: 3, maxHp: 3,
+      state: 'idle',
+      path: [], pathIndex: 0,
+      moveStartTime: 0,
+      lastAttackTime: 0,
+      attackTarget: null,
+      captureTimer: null,
+    };
+    room.units.set(startUnit.id, startUnit);
   });
 
   io.to(room.code).emit('game:start', {
@@ -289,6 +516,7 @@ function startGame(room) {
     players: Array.from(room.players.values()).map(p => ({
       id: p.id, name: p.name, color: p.color, resources: p.resources, troops: p.troops,
     })),
+    units: Array.from(room.units.values()).map(serializeUnit),
   });
 
   for (const [sid, player] of room.players) {
@@ -303,6 +531,9 @@ function startGame(room) {
     // Traitement de la production toutes les 500ms
     processProduction(room);
 
+    // Traitement des unités
+    processUnits(room);
+
     // Gain de ressources toutes les 4 ticks (2s)
     if (room.tickCount % 4 === 0) {
       for (const player of room.players.values()) {
@@ -313,9 +544,7 @@ function startGame(room) {
 
         player.resources.gold += owned;
         player.resources.mat += Math.floor(owned / 2);
-        // Les camps génèrent du mécanisme
         player.resources.mec += camps * 2;
-        // Les postes génèrent du fuel
         player.resources.fuel += posts;
       }
       broadcastResources(room);
@@ -450,14 +679,14 @@ io.on('connection', (socket) => {
 
     const TROOP_COST = 20;
     const totalCost = amount * TROOP_COST;
+    // Le client a déjà débité localement — on vérifie quand même côté serveur
     if (player.resources.gold < totalCost)
       return cb?.({ success: false, error: `Pas assez d'or (${totalCost}💰 requis)` });
 
-    // Déduire IMMÉDIATEMENT côté serveur
+    // Débiter côté serveur
     player.resources.gold -= totalCost;
-    broadcastResources(room);
-
-    // Ajouter les troupes immédiatement (recrutement instantané pour l'instant)
+    // Les troupes seront ajoutées progressivement par le client via l'animation (1s/troupe)
+    // Le serveur les ajoute d'un coup pour rester synchronisé
     player.troops += amount;
     broadcastResources(room);
 
@@ -558,6 +787,46 @@ io.on('connection', (socket) => {
     broadcastResources(room);
     io.to(code).emit('map:update', updatedTiles);
     cb?.({ success: true, troops: player.troops });
+  });
+
+  // ── Déplacement d'unités ──
+  socket.on('unit:move', ({ unitId, targetCol, targetRow }, cb) => {
+    const code = playerRoom.get(socket.id);
+    const room = rooms.get(code);
+    if (!room || room.status !== 'playing') return cb?.({ success: false });
+    const player = room.players.get(socket.id);
+    if (!player) return cb?.({ success: false });
+
+    const unit = room.units?.get(unitId);
+    if (!unit || unit.playerId !== socket.id) return cb?.({ success: false, error: 'Unité introuvable' });
+
+    const targetTile = room.map.tiles[`${targetCol},${targetRow}`];
+    if (!targetTile || !targetTile.active) return cb?.({ success: false, error: 'Destination invalide' });
+
+    // Calculer le chemin A*
+    const path = findPath(room.map, unit.col, unit.row, targetCol, targetRow);
+    if (!path || path.length === 0) return cb?.({ success: false, error: 'Chemin introuvable' });
+
+    unit.path = path;
+    unit.pathIndex = 0;
+    unit.state = 'moving';
+    unit.moveStartTime = Date.now();
+
+    io.to(code).emit('unit:update', serializeUnit(unit));
+    cb?.({ success: true });
+  });
+
+  // ── Arrêt d'une unité ──
+  socket.on('unit:stop', ({ unitId }, cb) => {
+    const code = playerRoom.get(socket.id);
+    const room = rooms.get(code);
+    if (!room) return cb?.({ success: false });
+    const unit = room.units?.get(unitId);
+    if (!unit || unit.playerId !== socket.id) return cb?.({ success: false });
+    unit.path = [];
+    unit.state = 'idle';
+    io.to(code).emit('unit:update', serializeUnit(unit));
+    cb?.({ success: true });
   });
 
   socket.on('disconnect', () => {

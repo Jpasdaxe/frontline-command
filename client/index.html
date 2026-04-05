@@ -332,7 +332,18 @@ let myId = null, myColor = null, currentRoom = null;
 let gameMap = null, gamePlayers = {};
 let myResources = { gold: 0, mat: 0, mec: 0, fuel: 0 };
 let myTroops = 0;
-let productionQueues = {}; // tileKey → { count, nextEndsAt, playerId }
+let productionQueues = {};
+
+// ─── UNITÉS ──────────────────────────────────────────────────────────────────
+const gameUnits = new Map(); // id → unit (état local)
+let selectedUnitId = null;   // unité sélectionnée
+let unitDragTarget = null;   // { col, row } destination en cours de tracé
+let isDraggingUnit = false;  // glisser-déposer en cours
+let unitDragStart = null;    // { x, y } pixel de départ du drag
+
+const UNIT_DEFS_CLIENT = {
+  soldier: { emoji: '🪖', color: '#e8a87c' },
+};
 
 socket.on('connect', () => { myId = socket.id; setConn(true); });
 socket.on('disconnect', () => setConn(false));
@@ -341,29 +352,45 @@ socket.on('game:start', (data) => initGame(data));
 socket.on('game:myId', (data) => { myId = data.myId; myColor = data.color; });
 socket.on('map:update', (tiles) => { if (gameMap) { Object.assign(gameMap.tiles, tiles); drawMap(); } });
 socket.on('game:resources', (res) => {
-  // Nouveau format: { socketId: { resources: {...}, troops: N } }
   for (const [id, data] of Object.entries(res)) {
-    const resources = data.resources ?? data; // compat ancien format
+    const resources = data.resources ?? data;
     const troops = data.troops ?? null;
     if (gamePlayers[id]) gamePlayers[id].resources = resources;
     if (id === myId) {
       myResources = resources;
-      if (troops !== null) myTroops = troops;
+      // Ne PAS écraser myTroops si une animation de recrutement est en cours
+      if (troops !== null && recruitStates.size === 0) myTroops = troops;
       updateResDisplay();
     }
   }
   updateHudPlayers();
 });
-socket.on('production:update', (queues) => {
-  productionQueues = queues;
-  drawMap();
-});
+socket.on('production:update', (queues) => { productionQueues = queues; drawMap(); });
 socket.on('game:tick', (data) => { document.getElementById('hud-tick').textContent = data.tick; });
 socket.on('game:over', (data) => {
   const isMe = data.winner.id === myId;
   document.getElementById('victory-name').innerHTML =
     `<span style="color:${data.winner.color}">${data.winner.name}</span> CONTRÔLE LE TERRITOIRE${isMe ? '<br><span style="color:var(--success);font-size:14px">C\'EST TOI !</span>' : ''}`;
   document.getElementById('victory-overlay').classList.add('active');
+});
+
+// Réception d'une mise à jour d'unité individuelle
+socket.on('unit:update', (u) => {
+  gameUnits.set(u.id, u);
+  drawMap();
+});
+
+// Réception batch d'unités (tick)
+socket.on('units:batch', (units) => {
+  for (const u of units) gameUnits.set(u.id, u);
+  drawMap();
+});
+
+// Suppression d'une unité (détruite)
+socket.on('unit:remove', ({ id }) => {
+  gameUnits.delete(id);
+  if (selectedUnitId === id) selectedUnitId = null;
+  drawMap();
 });
 
 function setConn(on) {
@@ -402,6 +429,7 @@ function leaveRoom() {
   currentRoom = null; gameMap = null; gamePlayers = {};
   myResources = { gold: 0, mat: 0, mec: 0, fuel: 0 }; myTroops = 0;
   productionQueues = {};
+  gameUnits.clear(); selectedUnitId = null; unitDragTarget = null;
   stopAllRecruitment();
   document.getElementById('game-screen').classList.remove('active');
   document.getElementById('lobby-wrap').style.display = 'flex';
@@ -674,7 +702,142 @@ function drawMap() {
   }
   ctx.restore();
 
-  // Cercle pinceau (en coordonnées écran, hors translate)
+  // ── Rendu des unités (coordonnées monde) ──────────────────────────────────
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+
+  // Grouper les unités par case pour le stacking
+  const unitsByTile = new Map();
+  for (const u of gameUnits.values()) {
+    const k = `${u.col},${u.row}`;
+    if (!unitsByTile.has(k)) unitsByTile.set(k, []);
+    unitsByTile.get(k).push(u);
+  }
+
+  for (const [tileKey, units] of unitsByTile) {
+    const [tc, tr] = tileKey.split(',').map(Number);
+    const { x, y } = hexToPixel(tc, tr);
+    const count = units.length;
+    const isSelected = units.some(u => u.id === selectedUnitId);
+    const isMine = units.some(u => u.playerId === myId);
+    const rep = units[0]; // représentant
+    const def = UNIT_DEFS_CLIENT[rep.type] || { emoji: '🪖', color: '#e8a87c' };
+
+    // Position : légèrement vers le haut pour ne pas masquer les troupes
+    const ux = x, uy = y - HEX_SIZE * 0.55;
+
+    // Fond de l'unité
+    ctx.save();
+    ctx.globalAlpha = isSelected ? 1 : 0.92;
+    ctx.fillStyle = isSelected ? '#ffffff' : (rep.color || def.color);
+    ctx.beginPath();
+    ctx.roundRect(ux - 12, uy - 11, 24, 22, 4);
+    ctx.fill();
+
+    // Bordure sélection pulsée
+    if (isSelected) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else if (isMine) {
+      ctx.strokeStyle = rep.color || def.color;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.6;
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Emoji unité
+    ctx.font = `13px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 1;
+    ctx.fillText(def.emoji, ux, uy - 1);
+
+    // Nombre si stack > 1
+    if (count > 1) {
+      ctx.save();
+      ctx.fillStyle = '#0a0c0e';
+      ctx.beginPath();
+      ctx.arc(ux + 9, uy - 8, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold 8px 'Share Tech Mono', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(count > 9 ? '9+' : count, ux + 9, uy - 8);
+      ctx.restore();
+    }
+
+    // Barre de PV (si endommagée)
+    if (rep.hp < rep.maxHp) {
+      const bw = 22, bh = 3;
+      const bx = ux - bw / 2, by = uy + 10;
+      ctx.save();
+      ctx.fillStyle = '#0a0c0e'; ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#4bc88a';
+      ctx.fillRect(bx, by, bw * (rep.hp / rep.maxHp), bh);
+      ctx.restore();
+    }
+
+    // Indicateur état (attaque = rouge pulsé)
+    if (rep.state === 'attacking') {
+      ctx.save();
+      ctx.globalAlpha = 0.5 + 0.4 * Math.sin(Date.now() / 200);
+      ctx.strokeStyle = '#c84b4b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(ux - 13, uy - 12, 26, 24, 5);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // ── Flèche de destination (drag unité) ────────────────────────────────────
+  if (selectedUnitId && unitDragTarget) {
+    const unit = gameUnits.get(selectedUnitId);
+    if (unit) {
+      const { x: sx, y: sy } = hexToPixel(unit.col, unit.row);
+      const { x: ex, y: ey } = hexToPixel(unitDragTarget.col, unitDragTarget.row);
+      const syu = sy - HEX_SIZE * 0.55;
+
+      ctx.save();
+      ctx.strokeStyle = unit.playerId === myId ? myColor : (unit.color || '#fff');
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(sx, syu);
+      ctx.lineTo(ex, ey - HEX_SIZE * 0.55);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Tête de flèche
+      const angle = Math.atan2(ey - syu, ex - sx);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = unit.playerId === myId ? myColor : (unit.color || '#fff');
+      ctx.beginPath();
+      ctx.moveTo(ex, ey - HEX_SIZE * 0.55);
+      ctx.lineTo(ex - 12 * Math.cos(angle - 0.4), ey - HEX_SIZE * 0.55 - 12 * Math.sin(angle - 0.4));
+      ctx.lineTo(ex - 12 * Math.cos(angle + 0.4), ey - HEX_SIZE * 0.55 - 12 * Math.sin(angle + 0.4));
+      ctx.closePath();
+      ctx.fill();
+
+      // Label destination
+      const targetTile = gameMap?.tiles[`${unitDragTarget.col},${unitDragTarget.row}`];
+      if (targetTile) {
+        const isEnemy = targetTile.owner && targetTile.owner !== myId;
+        ctx.fillStyle = isEnemy ? '#c84b4b' : '#4bc88a';
+        ctx.font = `bold 10px 'Share Tech Mono', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(isEnemy ? '⚔ ATTAQUER' : '→ ALLER', ex, ey - HEX_SIZE * 0.55 - 14);
+      }
+      ctx.restore();
+    }
+  }
+
+  ctx.restore();
   if (rightMouseDown && brushCursorX !== null) {
     ctx.save();
     const radius = brushRadius * HEX_SIZE * Math.sqrt(3) * 0.9;
@@ -697,6 +860,42 @@ function isAdjacentToPlayer_client(col, row) {
   if (!gameMap || !myId) return false;
   const dirs = col % 2 === 0 ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]] : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
   return dirs.some(([dc, dr]) => { const t = gameMap.tiles[`${col+dc},${row+dr}`]; return t && t.owner === myId; });
+}
+
+// Trouver l'unité sous le pixel (coords monde)
+function pixelToUnit(px, py) {
+  let bestId = null, bestDist = Infinity;
+  for (const u of gameUnits.values()) {
+    const { x, y } = hexToPixel(u.col, u.row);
+    const uy = y - HEX_SIZE * 0.55;
+    const dist = Math.sqrt((px - x) ** 2 + (py - uy) ** 2);
+    if (dist < 14 && dist < bestDist) { bestDist = dist; bestId = u.id; }
+  }
+  return bestId;
+}
+
+function moveSelectedUnit(targetCol, targetRow) {
+  if (!selectedUnitId) return;
+  socket.emit('unit:move', { unitId: selectedUnitId, targetCol, targetRow }, (res) => {
+    if (!res?.success) showNotif(res?.error || 'Déplacement impossible', 'error');
+    else {
+      // Mise à jour locale optimiste
+      const u = gameUnits.get(selectedUnitId);
+      if (u) { u.state = 'moving'; gameUnits.set(u.id, u); drawMap(); }
+    }
+  });
+  unitDragTarget = null;
+  selectedUnitId = null;
+  drawMap();
+}
+
+function stopSelectedUnit() {
+  if (!selectedUnitId) return;
+  socket.emit('unit:stop', { unitId: selectedUnitId }, () => {});
+  const u = gameUnits.get(selectedUnitId);
+  if (u) { u.state = 'idle'; u.path = []; gameUnits.set(u.id, u); }
+  selectedUnitId = null; unitDragTarget = null;
+  drawMap();
 }
 
 // ─── PINCEAU CLIC DROIT ──────────────────────────────────────────────────────
@@ -905,6 +1104,10 @@ document.getElementById('recruit-confirm').addEventListener('click', (e) => {
   const spreadAll = document.getElementById('recruit-spread').checked;
   const posts = getMyPosts();
 
+  // Débiter localement pour éviter le rebond visuel
+  myResources.gold -= cost;
+  updateResDisplay();
+
   if (spreadAll && posts.length > 1) {
     const perPost = Math.floor(recruitAmount / posts.length);
     let rem = recruitAmount - perPost * posts.length;
@@ -913,7 +1116,14 @@ document.getElementById('recruit-confirm').addEventListener('click', (e) => {
       if (amt <= 0) return;
       const t = gameMap.tiles[key];
       socket.emit('troops:recruit', { col: t.col, row: t.row, amount: amt }, (res) => {
-        if (!res?.success) showNotif(res?.error || 'Erreur recrutement', 'error');
+        if (!res?.success) {
+          // Rembourser la part refusée
+          myResources.gold += amt * TROOP_COST;
+          updateResDisplay();
+          showNotif(res?.error || 'Erreur recrutement', 'error');
+        } else {
+          startRecruitment(key, amt);
+        }
       });
     });
     showNotif(`⏳ ${recruitAmount} soldats répartis sur ${posts.length} posts`, 'success');
@@ -921,8 +1131,11 @@ document.getElementById('recruit-confirm').addEventListener('click', (e) => {
     const tile = gameMap.tiles[recruitTileKey];
     socket.emit('troops:recruit', { col: tile.col, row: tile.row, amount: recruitAmount }, (res) => {
       if (res?.success) {
-        showNotif(`🪖 +${recruitAmount} troupes recrutées !`, 'success');
+        startRecruitment(recruitTileKey, recruitAmount);
+        showNotif(`🪖 +${recruitAmount} troupes en recrutement !`, 'success');
       } else {
+        myResources.gold += cost;
+        updateResDisplay();
         showNotif(res?.error || 'Erreur recrutement', 'error');
       }
     });
@@ -994,6 +1207,12 @@ function doBuild(buildingId, cost) {
   if (!wheelTargetKey) return;
   const tile = gameMap.tiles[wheelTargetKey];
   if (!tile) return;
+  // Débiter localement immédiatement pour éviter le "rebond" visuel
+  if (cost) {
+    if (cost.gold) myResources.gold -= cost.gold;
+    if (cost.mat)  myResources.mat  -= cost.mat;
+    updateResDisplay();
+  }
   socket.emit('tile:build', { col: tile.col, row: tile.row, buildingId }, (res) => {
     if (res?.success) {
       tile.building = buildingId;
@@ -1001,16 +1220,63 @@ function doBuild(buildingId, cost) {
       const names = { recruit_post: '📑 Poste construit !', military_camp: '⛺ Camp militaire construit !' };
       showNotif(names[buildingId] || 'Bâtiment construit !', 'success');
     } else {
+      // Rembourser si le serveur refuse
+      if (cost) {
+        if (cost.gold) myResources.gold += cost.gold;
+        if (cost.mat)  myResources.mat  += cost.mat;
+        updateResDisplay();
+      }
       showNotif(res?.error || 'Construction impossible', 'error');
     }
   });
   closeAll();
 }
 
+// ─── POPUP UNITÉ ─────────────────────────────────────────────────────────────
+function openUnitPopup(unitId, screenX, screenY) {
+  const u = gameUnits.get(unitId);
+  if (!u) return;
+
+  // Compter les unités stackées sur la même case
+  const stacked = [...gameUnits.values()].filter(x => x.col === u.col && x.row === u.row);
+
+  // Créer popup dynamique
+  let popup = document.getElementById('unit-popup');
+  if (!popup) {
+    popup = document.createElement('div');
+    popup.id = 'unit-popup';
+    popup.style.cssText = `position:fixed;z-index:95;background:var(--surface);border:1px solid var(--border);border-left:3px solid #8ab4e8;min-width:220px;display:none;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.6);cursor:default;`;
+    document.getElementById('wheel-overlay').appendChild(popup);
+  }
+
+  const stateLabel = { idle: 'En attente', moving: 'En déplacement', attacking: 'En combat' };
+  popup.innerHTML = `
+    <div style="font-family:var(--mono);font-size:10px;letter-spacing:3px;color:#8ab4e8;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2)">🪖 UNITÉ — ${stacked.length > 1 ? stacked.length + ' SOLDATS STACKÉS' : 'SOLDAT'}</div>
+    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted)">
+      <div>PV : <span style="color:var(--accent)">${u.hp}/${u.maxHp}</span></div>
+      <div>État : <span style="color:var(--text)">${stateLabel[u.state] || u.state}</span></div>
+      ${u.state !== 'idle' ? `<button onclick="stopSelectedUnit()" style="font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:2px;padding:8px;border:1px solid var(--danger);color:var(--danger);background:transparent;cursor:pointer;">⏹ ARRÊTER</button>` : ''}
+    </div>
+    <div id="unit-popup-close" style="padding:8px 16px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:2px;cursor:pointer;text-align:center;border-top:1px solid var(--border);">✕ FERMER</div>
+  `;
+
+  positionPopup(popup, screenX, screenY);
+  activateOverlay();
+
+  popup.querySelector('#unit-popup-close')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectedUnitId = null; unitDragTarget = null;
+    closeAll();
+  });
+}
+
 // ─── INIT GAME ───────────────────────────────────────────────────────────────
 function initGame(data) {
   gameMap = data.map;
   data.players.forEach(p => { gamePlayers[p.id] = p; });
+  // Charger les unités initiales
+  gameUnits.clear(); selectedUnitId = null;
+  if (data.units) data.units.forEach(u => gameUnits.set(u.id, u));
   document.getElementById('lobby-wrap').style.display = 'none';
   document.getElementById('game-screen').classList.add('active');
   canvas = document.getElementById('game-canvas');
@@ -1030,6 +1296,7 @@ function initGame(data) {
     const rect = canvas.getBoundingClientRect();
     const px = e.clientX - rect.left - offsetX, py = e.clientY - rect.top - offsetY;
 
+    // Mode pinceau clic droit
     if (rightMouseDown) {
       brushCursorX = e.clientX - rect.left;
       brushCursorY = e.clientY - rect.top;
@@ -1042,6 +1309,18 @@ function initGame(data) {
       drawMap(); return;
     }
 
+    // Mode drag unité (clic gauche maintenu sur une unité)
+    if (isDraggingUnit && unitDragStart) {
+      const key = pixelToHex(px, py);
+      if (key) {
+        const [c, r] = key.split(',').map(Number);
+        unitDragTarget = { col: c, row: r };
+      } else {
+        unitDragTarget = null;
+      }
+      drawMap(); return;
+    }
+
     if (dragStart) {
       const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
       if (Math.sqrt(dx*dx + dy*dy) > 5) isDragging = true;
@@ -1051,6 +1330,7 @@ function initGame(data) {
       offsetY = dragOffset.y + (e.clientY - dragStart.y);
       drawMap(); return;
     }
+
     const key = pixelToHex(px, py);
     if (key !== hoveredTile) { hoveredTile = key; drawMap(); }
     const tooltip = document.getElementById('tile-tooltip');
@@ -1066,6 +1346,12 @@ function initGame(data) {
         else if (tile.building === 'military_camp') hint += ' — CLIC produire';
         else hint += ' — CLIC construire';
       } else if (adj) hint += ' — CLIC capturer (5💰)';
+      // Info unité survolée
+      const unitId = pixelToUnit(px, py);
+      if (unitId) {
+        const u = gameUnits.get(unitId);
+        if (u) hint = `🪖 ${u.hp}/${u.maxHp}PV — ${u.state}${u.playerId === myId ? ' | CLIC-GLISSER pour déplacer' : ''}`;
+      }
       tooltip.style.display = 'block';
       tooltip.style.left = (e.clientX + 12) + 'px'; tooltip.style.top = (e.clientY - 10) + 'px';
       tooltip.textContent = hint; tooltip.style.borderColor = tile.color || 'var(--border)';
@@ -1075,11 +1361,9 @@ function initGame(data) {
   canvas.addEventListener('mousedown', (e) => {
     if (e.button === 2) {
       e.preventDefault();
-      rightMouseDown = true;
-      brushPaintedThisPress.clear();
+      rightMouseDown = true; brushPaintedThisPress.clear();
       const rect = canvas.getBoundingClientRect();
-      brushCursorX = e.clientX - rect.left;
-      brushCursorY = e.clientY - rect.top;
+      brushCursorX = e.clientX - rect.left; brushCursorY = e.clientY - rect.top;
       const px = e.clientX - rect.left - offsetX, py = e.clientY - rect.top - offsetY;
       const centerKey = pixelToHex(px, py);
       if (centerKey) {
@@ -1089,6 +1373,27 @@ function initGame(data) {
       }
       closeAll(); drawMap(); return;
     }
+
+    // Clic gauche
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left - offsetX, py = e.clientY - rect.top - offsetY;
+
+    // Vérifier si on clique sur une unité à moi
+    const unitId = pixelToUnit(px, py);
+    if (unitId) {
+      const u = gameUnits.get(unitId);
+      if (u && u.playerId === myId) {
+        selectedUnitId = unitId;
+        isDraggingUnit = true;
+        unitDragStart = { x: e.clientX, y: e.clientY };
+        unitDragTarget = null;
+        closeAll();
+        drawMap();
+        return;
+      }
+    }
+
+    // Sinon pan normal
     isDragging = false;
     dragStart = { x: e.clientX, y: e.clientY };
     dragOffset = { x: offsetX, y: offsetY };
@@ -1097,26 +1402,48 @@ function initGame(data) {
   canvas.addEventListener('mouseup', (e) => {
     if (e.button === 2) {
       rightMouseDown = false; brushHoveredKeys = new Set(); brushPaintedThisPress.clear();
-      flushDeploys(); // Envoie tous les déploiements au serveur
-      drawMap(); return;
+      flushDeploys(); drawMap(); return;
     }
+
+    // Fin de drag unité
+    if (isDraggingUnit) {
+      isDraggingUnit = false;
+      unitDragStart = null;
+      if (unitDragTarget) {
+        // Vérifier que la destination est différente de la position actuelle
+        const u = gameUnits.get(selectedUnitId);
+        if (u && (u.col !== unitDragTarget.col || u.row !== unitDragTarget.row)) {
+          moveSelectedUnit(unitDragTarget.col, unitDragTarget.row);
+        } else {
+          unitDragTarget = null;
+          // Clic simple sur unité → popup info + arrêt
+          openUnitPopup(selectedUnitId, e.clientX, e.clientY);
+        }
+      } else {
+        openUnitPopup(selectedUnitId, e.clientX, e.clientY);
+      }
+      return;
+    }
+
     if (!isDragging && hoveredTile) {
       const tile = gameMap.tiles[hoveredTile];
       if (tile && tile.active) {
         if (tile.owner === myId) {
-          if (tile.building === 'recruit_post') {
-            closeAll(); openRecruitPopup(hoveredTile, e.clientX, e.clientY);
-          } else if (tile.building === 'military_camp') {
-            closeAll(); openCampPopup(hoveredTile, e.clientX, e.clientY);
-          } else {
-            closeAll(); openWheel(e.clientX, e.clientY, hoveredTile);
-          }
+          if (tile.building === 'recruit_post') { closeAll(); openRecruitPopup(hoveredTile, e.clientX, e.clientY); }
+          else if (tile.building === 'military_camp') { closeAll(); openCampPopup(hoveredTile, e.clientX, e.clientY); }
+          else { closeAll(); openWheel(e.clientX, e.clientY, hoveredTile); }
+        } else if (selectedUnitId) {
+          // Clic sur hex ennemi avec unité sélectionnée → déplacer
+          const [tc, tr] = hoveredTile.split(',').map(Number);
+          moveSelectedUnit(tc, tr);
         } else {
-          socket.emit('tile:capture', { col: tile.col, row: tile.row }, (res) => {
-            if (!res?.success && res?.error) showNotif(res.error, 'error');
-          });
+          // Désélectionner unité si on clique sur une tile quelconque
+          if (selectedUnitId) { selectedUnitId = null; unitDragTarget = null; drawMap(); }
         }
       }
+    } else if (!isDragging) {
+      // Clic dans le vide → désélectionner
+      selectedUnitId = null; unitDragTarget = null; drawMap();
     }
     isDragging = false; dragStart = null;
   });
@@ -1124,6 +1451,7 @@ function initGame(data) {
   canvas.addEventListener('mouseleave', () => {
     hoveredTile = null; document.getElementById('tile-tooltip').style.display = 'none';
     isDragging = false; dragStart = null;
+    isDraggingUnit = false; unitDragStart = null; unitDragTarget = null;
     rightMouseDown = false; brushHoveredKeys = new Set();
     brushCursorX = null; brushCursorY = null;
     flushDeploys();
@@ -1139,6 +1467,9 @@ function initGame(data) {
   }, { passive: false });
 
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // Redessiner régulièrement pour les animations d'attaque
+  setInterval(() => { if (gameMap) drawMap(); }, 150);
 }
 </script>
 </body>
